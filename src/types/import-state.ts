@@ -7,6 +7,8 @@ export type ImportState = {
   phase: 'resources' | 'pipelineDetails' | 'dealDetails' | 'done';
   resourceIndex: number;
   page: number;
+  recordOffset: number;
+  pageSignature: string | null;
   nextPath: string | null;
   parentCursor: string | null;
   parentId: string | null;

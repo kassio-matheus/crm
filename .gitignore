@@ -45,3 +45,6 @@ yarn-error.log*
 # Local agent integrations
 .codex/
 .agents/
+
+# Generated editor hints
+.vscode/

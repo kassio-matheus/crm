@@ -15,9 +15,20 @@ export type SalesDeal = {
   closeDate?: string | null;
   nextActivityAt?: string | null;
   lastContactAt?: string | null;
-  amount?: { amountMicros?: string | number | null; currencyCode?: string | null } | null;
+  amount?: {
+    amountMicros?: string | number | null;
+    currencyCode?: string | null;
+  } | null;
   company?: { id: string; name?: string | null } | null;
-  pointOfContact?: { id: string; name?: { firstName?: string | null; lastName?: string | null } | null; emails?: { primaryEmail?: string | null } | null; phones?: { primaryPhoneNumber?: string | null } | null } | null;
-  owner?: { id: string; name?: { firstName?: string | null; lastName?: string | null } | null } | null;
+  pointOfContact?: {
+    id: string;
+    name?: { firstName?: string | null; lastName?: string | null } | null;
+    emails?: { primaryEmail?: string | null } | null;
+    phones?: { primaryPhoneNumber?: string | null } | null;
+  } | null;
+  owner?: {
+    id: string;
+    name?: { firstName?: string | null; lastName?: string | null } | null;
+  } | null;
   rdOriginalData?: Record<string, unknown> | null;
 };

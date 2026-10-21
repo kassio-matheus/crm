@@ -5,7 +5,8 @@
   "engines": {
     "node": "^24.5.0",
     "npm": "please-use-yarn",
-    "yarn": ">=4.0.2"
+    "yarn": ">=4.0.2",
+    "twenty": ">=2.49.0"
   },
   "keywords": [],
   "packageManager": "yarn@4.13.0",
@@ -16,7 +17,8 @@
     "typecheck": "tsgo --noEmit -p tsconfig.spec.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:unit": "vitest run --config vitest.unit.config.ts"
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "setup:workspace": "node scripts/setup-workspace.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.7.2",

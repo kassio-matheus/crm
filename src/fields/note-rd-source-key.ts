@@ -3,7 +3,7 @@ import { defineField, FieldType } from 'twenty-sdk/define';
 export default defineField({
   universalIdentifier: 'e8c4aae0-e541-48e0-8272-bd7d81bad57f',
   name: 'rdSourceKey',
-  label: 'Rd source key',
+  label: 'Referência no RD Station',
   type: FieldType.TEXT,
   isUnique: true,
   isNullable: true,

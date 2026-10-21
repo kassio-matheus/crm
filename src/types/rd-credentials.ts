@@ -3,6 +3,7 @@ export type RdCredentials = {
   accountKey: string;
   accessToken: string;
   refreshToken?: string;
+  legacyToken?: string;
   clientId?: string;
   clientSecret?: string;
 };

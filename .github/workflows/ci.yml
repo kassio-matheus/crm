@@ -35,11 +35,18 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: '.nvmrc'
+          node-version-file: ".nvmrc"
           cache: yarn
 
       - name: Install dependencies
         run: yarn install --immutable
+
+      - name: Sync additive metadata and generate workspace SDK
+        run: yarn setup:workspace
+        env:
+          NODE_ENV: test
+          TWENTY_API_URL: ${{ steps.twenty.outputs.server-url }}
+          TWENTY_API_KEY: ${{ steps.twenty.outputs.api-key }}
 
       - name: Lint
         run: yarn lint

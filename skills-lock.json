@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "skills": {
+    "create-app": {
+      "source": "twentyhq/twenty",
+      "ref": "agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/create-app/SKILL.md",
+      "computedHash": "8673c3cda39578b4bcfa040b02d18801be7a61ab0df951066582e2d3408b89e0"
+    },
+    "develop-app": {
+      "source": "twentyhq/twenty",
+      "ref": "agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/develop-app/SKILL.md",
+      "computedHash": "4400f6a72971ede229b42cdefc35408dee5b3c892e501475ada39e2d23c25ca5"
+    },
+    "manage-app": {
+      "source": "twentyhq/twenty",
+      "ref": "agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/manage-app/SKILL.md",
+      "computedHash": "2f05f1c6a79e7f435aca5ce84248cc41c4d201b3075509d4dcd01466999016da"
+    },
+    "publish-app": {
+      "source": "twentyhq/twenty",
+      "ref": "agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/publish-app/SKILL.md",
+      "computedHash": "bedc252ba9104bc55fcf062d60d2b42b283efbfe696ef0fb6742e70ffb249811"
+    },
+    "use-twenty-mcp": {
+      "source": "twentyhq/twenty",
+      "ref": "agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/use-twenty-mcp/SKILL.md",
+      "computedHash": "9d3a685d81bebc9c36f4029e910c5895351ea9ac2d9a89764fe2c0266238b6d9"
+    }
+  }
+}

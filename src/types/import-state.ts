@@ -1,0 +1,26 @@
+export type ImportState = {
+  id: string;
+  accountKey: string;
+  version: 'v1' | 'v2';
+  dryRun: boolean;
+  status: 'READY' | 'RUNNING' | 'PAUSED' | 'FAILED' | 'COMPLETED';
+  phase: 'resources' | 'pipelineDetails' | 'dealDetails' | 'done';
+  resourceIndex: number;
+  page: number;
+  nextPath: string | null;
+  parentCursor: string | null;
+  parentId: string | null;
+  detailIndex: number;
+  processed: number;
+  created: number;
+  skipped: number;
+  requests: number;
+  retryCount: number;
+  counts: Record<string, number>;
+  revision: number;
+  jobId: string | null;
+  nextRequestAt: number;
+  error: string | null;
+  startedAt: string;
+  updatedAt: string;
+};

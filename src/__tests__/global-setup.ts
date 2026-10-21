@@ -1,88 +1,19 @@
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-
-import { appDevOnce, appUninstall } from 'twenty-sdk/cli';
-
-const APP_PATH = process.cwd();
-const CONFIG_DIR = path.join(os.homedir(), '.twenty');
-
-function validateEnv(): { apiUrl: string; apiKey: string } {
-  const apiUrl = process.env.TWENTY_API_URL;
-  const apiKey = process.env.TWENTY_API_KEY;
-
-  if (!apiUrl || !apiKey) {
-    throw new Error(
-      'TWENTY_API_URL and TWENTY_API_KEY must be set.\n' +
-        'Start a local server: yarn twenty docker:start\n' +
-        'Or set them in vitest env config.',
-    );
-  }
-
-  return { apiUrl, apiKey };
-}
-
-async function checkServer(apiUrl: string) {
-  let response: Response;
-
-  try {
-    response = await fetch(`${apiUrl}/healthz`);
-  } catch {
-    throw new Error(
-      `Twenty server is not reachable at ${apiUrl}. ` +
-        'Make sure the server is running before executing integration tests.',
-    );
-  }
-
-  if (!response.ok) {
-    throw new Error(`Server at ${apiUrl} returned ${response.status}`);
-  }
-}
-
-function writeConfig(apiUrl: string, apiKey: string) {
-  const payload = JSON.stringify(
-    {
-      version: 1,
-      remotes: {
-        local: { apiUrl, apiKey, twentyCLIAccessToken: apiKey },
-      },
-      defaultRemote: 'local',
-    },
-    null,
-    2,
-  );
-
-  fs.mkdirSync(CONFIG_DIR, { recursive: true });
-  fs.writeFileSync(path.join(CONFIG_DIR, 'config.test.json'), payload);
-}
+import { appDevOnce } from 'twenty-sdk/cli';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 export async function setup() {
-  const { apiUrl, apiKey } = validateEnv();
-
-  await checkServer(apiUrl);
-
-  writeConfig(apiUrl, apiKey);
-
-  await appUninstall({ appPath: APP_PATH }).catch(() => {});
-
-  const result = await appDevOnce({
-    appPath: APP_PATH,
-    onProgress: (message: string) => console.log(`[dev] ${message}`),
-  });
-
-  if (!result.success) {
-    throw new Error(
-      `Dev sync failed: ${result.error?.message ?? 'Unknown error'}`,
-    );
-  }
-}
-
-export async function teardown() {
-  const uninstallResult = await appUninstall({ appPath: APP_PATH });
-
-  if (!uninstallResult.success) {
-    console.warn(
-      `App uninstall failed: ${uninstallResult.error?.message ?? 'Unknown error'}`,
-    );
-  }
+  const apiUrl = process.env.TWENTY_API_URL;
+  const apiKey = process.env.TWENTY_API_KEY;
+  if (!apiUrl || !apiKey) throw new Error('Integration tests need an isolated Twenty URL and API key.');
+  const target = new URL(apiUrl);
+  if (!['localhost', '127.0.0.1'].includes(target.hostname) || target.port !== '2021') throw new Error('Integration tests are restricted to localhost:2021. No app uninstall is performed.');
+  if (!(await fetch(`${apiUrl}/healthz`)).ok) throw new Error('The isolated Twenty test server is unavailable.');
+  const dir = path.join(os.homedir(), '.twenty');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'config.test.json'), JSON.stringify({ version: 1, remotes: { local: { apiUrl, apiKey, twentyCLIAccessToken: apiKey } }, defaultRemote: 'local' }), { mode: 0o600 });
+  // The SDK uses config.test.json when NODE_ENV=test. Disable inference of deleted entities.
+  const result = await appDevOnce({ appPath: process.cwd(), apply: true, inferDeletionFromMissingEntities: false, confirmApply: async () => true });
+  if (!result.success) throw new Error(`Test instance sync failed: ${result.error?.message}`);
 }

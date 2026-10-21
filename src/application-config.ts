@@ -11,4 +11,7 @@ export default defineApplication({
   displayName: APP_DISPLAY_NAME,
   description: APP_DESCRIPTION,
   logo: 'public/logo.svg',
+  applicationVariables: {
+    RD_CREDENTIALS: { universalIdentifier: 'b66407f0-edd7-445c-a0f8-55fe042d9e91', label: 'RD Station credentials', description: 'Encrypted credentials saved by the import page. Never expose to front components.', isSecret: true },
+  },
 });

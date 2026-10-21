@@ -41,3 +41,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 *.d.ts
+
+# Local agent integrations
+.codex/
+.agents/

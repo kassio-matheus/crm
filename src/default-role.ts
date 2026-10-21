@@ -1,4 +1,4 @@
-import { defineApplicationRole } from 'twenty-sdk/define';
+import { defineApplicationRole, SystemPermissionFlag } from 'twenty-sdk/define';
 
 import {
   APP_DISPLAY_NAME,
@@ -11,6 +11,7 @@ export default defineApplicationRole({
   description: `${APP_DISPLAY_NAME} default function role`,
   canReadAllObjectRecords: true,
   canUpdateAllObjectRecords: true,
-  canSoftDeleteAllObjectRecords: true,
+  canSoftDeleteAllObjectRecords: false,
   canDestroyAllObjectRecords: false,
+  permissionFlagUniversalIdentifiers: [SystemPermissionFlag.APPLICATIONS, SystemPermissionFlag.AI],
 });

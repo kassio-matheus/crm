@@ -1,5 +1,5 @@
-export const APP_DISPLAY_NAME = 'Crm';
-export const APP_DESCRIPTION = '';
+export const APP_DISPLAY_NAME = 'Negociações';
+export const APP_DESCRIPTION = 'Sales pipelines and resumable RD Station CRM migration';
 export const APPLICATION_UNIVERSAL_IDENTIFIER = 'b2d99cf4-2bc2-4fbe-ab0f-3f3cc9ad4e69';
 export const DEFAULT_ROLE_UNIVERSAL_IDENTIFIER = 'cb09ce0e-a614-46c0-a2b6-3fd8099c55dc';
 export const HEALTH_CHECK_UNIVERSAL_IDENTIFIER = 'a43f9412-becf-4685-ad02-9339666647ad';

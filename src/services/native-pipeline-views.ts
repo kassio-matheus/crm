@@ -81,7 +81,14 @@ export class NativePipelineViews {
       getViewFields: { __args: { viewId: pipelineId }, fieldMetadataId: true },
       getViewFilters: { __args: { viewId: pipelineId }, fieldMetadataId: true },
       getViewSorts: { __args: { viewId: pipelineId }, fieldMetadataId: true },
+      getViewGroups: {
+        __args: { viewId: pipelineId },
+        id: true,
+        fieldValue: true,
+        isVisible: true,
+      },
     });
+    await this.hideUnassigned(pipelineId, current.getViewGroups ?? []);
     for (const [position, name] of [
       'name',
       'dealStatus',
@@ -201,8 +208,15 @@ export class NativePipelineViews {
         await this.metadata.mutation({
           deleteViewGroup: { __args: { input: { id: group.id } }, id: true },
         });
+    await this.hideUnassigned(pipelineId, current.getViewGroups);
+  }
+  /** Also covers boards opened directly through Twenty's native view picker after import. */
+  private async hideUnassigned(
+    pipelineId: string,
+    groups: { id: string; fieldValue: string; isVisible: boolean }[],
+  ) {
     // Only actual stages are board columns. Unassigned deals stay available in the native list.
-    const unassigned = current.getViewGroups.find((g) => !g.fieldValue);
+    const unassigned = groups.find((g) => !g.fieldValue);
     if (unassigned?.isVisible)
       await this.metadata.mutation({
         updateViewGroup: {

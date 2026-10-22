@@ -131,3 +131,87 @@ describe('native pipeline selection and direct status actions', () => {
     }
   });
 });
+
+it('uses BRL for newly created values without converting existing USD records', async () => {
+  const result = await metadata.query({
+    objects: {
+      __args: {
+        filter: {
+          universalIdentifier: { eq: '20202020-9549-49dd-b2b2-883999db8938' },
+        },
+        paging: { first: 1 },
+      },
+      edges: {
+        node: { fieldsList: { id: true, name: true, defaultValue: true } },
+      },
+    },
+  });
+  const field = result.objects.edges[0].node.fieldsList!.find(
+    (f) => f.name === 'amount',
+  )!;
+  const old = randomUUID(),
+    fresh = randomUUID();
+  await core.mutation({
+    createOpportunity: {
+      __args: {
+        data: {
+          id: old,
+          name: 'Existing USD currency integration',
+          amount: { amountMicros: 123450000, currencyCode: 'USD' },
+        },
+      },
+      id: true,
+    },
+  });
+  created.push({ object: 'deal', id: old });
+  try {
+    await metadata.mutation({
+      updateOneField: {
+        __args: {
+          input: {
+            id: field.id,
+            update: { defaultValue: { currencyCode: "'BRL'" } },
+          },
+        },
+        id: true,
+      },
+    });
+    await core.mutation({
+      createOpportunity: {
+        __args: { data: { id: fresh, name: 'New BRL currency integration' } },
+        id: true,
+      },
+    });
+    created.push({ object: 'deal', id: fresh });
+    const records = await core.query({
+      opportunities: {
+        __args: { first: 2, filter: { id: { in: [old, fresh] } } },
+        edges: {
+          node: {
+            id: true,
+            amount: { currencyCode: true, amountMicros: true },
+          },
+        },
+      },
+    });
+    expect(
+      records.opportunities!.edges.find((e) => e.node.id === fresh)?.node.amount
+        ?.currencyCode,
+    ).toBe('BRL');
+    expect(
+      records.opportunities!.edges.find((e) => e.node.id === old)?.node.amount,
+    ).toEqual({ currencyCode: 'USD', amountMicros: 123450000 });
+  } finally {
+    await metadata.mutation({
+      updateOneField: {
+        __args: {
+          input: {
+            id: field.id,
+            update: { defaultValue: field.defaultValue ?? null },
+          },
+        },
+        id: true,
+      },
+    });
+  }
+});

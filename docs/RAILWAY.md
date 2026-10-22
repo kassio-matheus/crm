@@ -34,7 +34,7 @@ Use `deploy/railway/variables.example` como roteiro no editor de variáveis. Os 
 - `SERVER_URL`: origem HTTPS final do CRM, sem caminhos. Ao usar domínio próprio, atualize servidor e worker.
 - `NODE_PORT=3000` e `PORT=3000`: devem coincidir com a porta alvo do domínio.
 - Gere **dois** segredos independentes com `openssl rand -base64 32`: `ENCRYPTION_KEY` e `APP_SECRET`. Guarde-os em um cofre. Eles precisam ser idênticos entre servidor e worker e sobreviver às atualizações. Em uma migração de instalação existente, preserve as chaves anteriores; não gere chaves novas sobre um banco com segredos criptografados.
-- `STORAGE_TYPE=s3`: configure os seis valores `STORAGE_S3_*` do exemplo. Server e worker devem apontar para o mesmo bucket e usar os mesmos valores. Não use o sistema de arquivos temporário de um serviço Railway para anexos.
+- `STORAGE_TYPE=s3`: configure os valores `STORAGE_S3_*` do exemplo. Server e worker devem apontar para o mesmo bucket e usar os mesmos valores. Não use o sistema de arquivos temporário de um serviço Railway para anexos.
 - Mantenha `NODE_ENV=production`, `SIGN_IN_PREFILLED=false`, `IS_MULTIWORKSPACE_ENABLED=false`, `CODE_INTERPRETER_TYPE=DISABLED` e `IS_CONFIG_VARIABLES_IN_DB_ENABLED=false`. Este último torna as variáveis do Railway a configuração efetiva; integrações e SMTP também são configurados por variáveis nesse perfil.
 - No worker, use referências `${{Twenty.NOME_DA_VARIAVEL}}` para os valores compartilhados. Sobrescreva somente `DISABLE_DB_MIGRATIONS=true` e `DISABLE_CRON_JOBS_REGISTRATION=true`; no servidor, ambos são `false`.
 

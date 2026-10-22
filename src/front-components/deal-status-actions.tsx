@@ -26,6 +26,7 @@ const DealStatusActions = () => {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setStatus(null);
     setError('');
     if (!id) {
       setLoading(false);
@@ -85,13 +86,15 @@ const DealStatusActions = () => {
   };
   const paused = status === 'PAUSED';
   const label =
-    status === 'WON'
-      ? '✓ Vendido'
-      : status === 'LOST'
-        ? '✕ Perdido'
-        : paused
-          ? 'Ⅱ Pausado'
-          : '▶ Em andamento';
+    status === null
+      ? 'Status indisponível'
+      : status === 'WON'
+        ? '✓ Vendido'
+        : status === 'LOST'
+          ? '✕ Perdido'
+          : paused
+            ? 'Ⅱ Pausado'
+            : '▶ Em andamento';
   return (
     <section
       aria-label="Ações da negociação"
@@ -118,7 +121,9 @@ const DealStatusActions = () => {
           <Button
             key={action.value}
             variant="outline"
-            disabled={!id || loading || busy || status === action.value}
+            disabled={
+              !id || !status || loading || busy || status === action.value
+            }
             onClick={() => void change(action.value)}
             aria-label={action.label}
             startIcon={<action.Icon size={16} />}

@@ -51,7 +51,7 @@ describe('native pipeline view provisioning', () => {
       },
     });
     expect(mutation.mock.calls.some(([r]) => r.createViewFilter)).toBe(true);
-    expect(mutation).toHaveBeenCalledTimes(9);
+    expect(mutation).toHaveBeenCalledTimes(10);
   });
   it('preserves native view customizations on replay', async () => {
     query
@@ -74,6 +74,7 @@ describe('native pipeline view provisioning', () => {
         getViewFields: fields.map((f) => ({ fieldMetadataId: f.id })),
         getViewFilters: [{ fieldMetadataId: 'salesPipeline' }],
         getViewSorts: [{ fieldMetadataId: 'name' }],
+        getViewGroups: [{ id: 'null', fieldValue: '', isVisible: false }],
       });
     await service.ensure('pipeline', 'Old source name');
     expect(mutation).not.toHaveBeenCalled();

@@ -52,6 +52,7 @@ try {
     'objects',
     'views',
     'page-layouts',
+    'page-layout-tabs',
     'navigation-menu-items',
     'roles',
     'agents',
@@ -64,6 +65,8 @@ try {
   for (const filename of ['application-config.ts', 'default-role.ts'])
     cpSync(join(root, 'src', filename), join(staging, 'src', filename));
   cpSync(join(root, 'public'), join(staging, 'public'), { recursive: true });
+  // Switching an existing PAGE_LAYOUT item to a new VIEW needs that view to exist first.
+  rmSync(join(staging, 'src/navigation-menu-items/main-page.navigation-menu-item.ts'), { force: true });
   mkdirSync(join(staging, 'src', 'front-components'), { recursive: true });
   for (const filename of ['main-page.tsx', 'rd-import-page.tsx']) {
     const source = readFileSync(
@@ -95,14 +98,16 @@ try {
       `import { defineFrontComponent } from 'twenty-sdk/define';\nexport default defineFrontComponent({ universalIdentifier: '${identifier}', name: '${filename === 'main-page.tsx' ? 'Negociações' : 'rd-import-page'}', component: () => null });\n`,
     );
   }
-  execFileSync('yarn', ['twenty', 'apply', '--no-delete', staging], {
+  execFileSync('yarn', ['twenty', process.argv.includes('--plan-only') ? 'plan' : 'apply', '--no-delete', staging], {
     cwd: root,
     stdio: 'inherit',
   });
-  execFileSync('yarn', ['twenty', 'dev:generate-client'], {
+  if (!process.argv.includes('--plan-only')) execFileSync('yarn', ['twenty', 'dev:generate-client'], {
     cwd: root,
     stdio: 'inherit',
   });
+  if (process.argv.includes('--model-only') || process.argv.includes('--plan-only')) process.exitCode = 0;
+  else
   execFileSync('yarn', ['twenty', 'apply', '--no-delete'], {
     cwd: root,
     stdio: 'inherit',

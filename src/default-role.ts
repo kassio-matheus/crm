@@ -7,6 +7,7 @@ import {
   APP_DISPLAY_NAME,
   DEFAULT_ROLE_UNIVERSAL_IDENTIFIER,
 } from 'src/constants/universal-identifiers';
+import {NATIVE_SALES} from 'src/constants/native-sales';
 import { SOURCE_OBJECT } from 'src/constants/rd-identifiers';
 
 export default defineApplicationRole({
@@ -40,6 +41,7 @@ export default defineApplicationRole({
       canReadObjectRecords: true,
       canUpdateObjectRecords: false,
     },
+    ...[NATIVE_SALES.pipeline,NATIVE_SALES.stage].map(objectUniversalIdentifier=>({objectUniversalIdentifier,canReadObjectRecords:true,canUpdateObjectRecords:true,canSoftDeleteObjectRecords:false,canDestroyObjectRecords:false})),
     {
       objectUniversalIdentifier: SOURCE_OBJECT,
       canReadObjectRecords: true,

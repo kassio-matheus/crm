@@ -7,5 +7,13 @@ export default defineView({
   type: 'FIELDS_WIDGET',
   icon: 'IconListDetails',
   position: 0,
-  fields: [{universalIdentifier:'0ba4a172-ed86-45bb-878a-2fb32def7d0f',fieldMetadataUniversalIdentifier:'6d0beed8-4d95-47b2-96f5-9a7fbc8b4684',position:0,isVisible:true,size:200}],
+  fields: [
+    {
+      universalIdentifier: '0ba4a172-ed86-45bb-878a-2fb32def7d0f',
+      fieldMetadataUniversalIdentifier: '6d0beed8-4d95-47b2-96f5-9a7fbc8b4684',
+      position: 0,
+      isVisible: true,
+      size: 200,
+    },
+  ],
 });

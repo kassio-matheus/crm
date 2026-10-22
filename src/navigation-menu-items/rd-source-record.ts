@@ -1,4 +1,4 @@
-import {NATIVE_SALES} from 'src/constants/native-sales';
+import { NATIVE_SALES } from 'src/constants/native-sales';
 import {
   defineNavigationMenuItem,
   NavigationMenuItemType,
@@ -9,7 +9,7 @@ export default defineNavigationMenuItem({
   name: 'Registros da importação',
   icon: 'IconCompass',
   position: 2,
- folderUniversalIdentifier:NATIVE_SALES.adminFolder,
+  folderUniversalIdentifier: NATIVE_SALES.adminFolder,
   type: NavigationMenuItemType.OBJECT,
   targetObjectUniversalIdentifier: '775d48f3-8678-43d2-9796-465b0f007d98',
 });

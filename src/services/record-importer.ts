@@ -1,12 +1,16 @@
 import { CoreApiClient, type CoreSchema } from 'twenty-client-sdk/core';
 import { AttachmentImporter } from 'src/services/attachment-importer';
+import { NativePipelineViews } from 'src/services/native-pipeline-views';
 import { sourceId } from 'src/utils/source-id.util';
 import { mapRdRecord } from 'src/utils/map-rd-record.util';
 import { sanitizeSource } from 'src/utils/sanitize-source.util';
 
 /** Create-only import: never updates, merges by name/email, deletes or overwrites a user's edits. */
 export class RecordImporter {
-  constructor(private client = new CoreApiClient()) {}
+  constructor(
+    private client = new CoreApiClient(),
+    private views = new NativePipelineViews(),
+  ) {}
 
   async import(
     kind: string,
@@ -63,7 +67,12 @@ export class RecordImporter {
         edges: { node: { id: true, targetId: true } },
       },
     });
-    if (archive.rdSourceRecords!.edges[0]?.node.targetId) return 'skipped';
+    // Older releases archived catalogs only. Replaying them can safely create native catalogs.
+    if (
+      archive.rdSourceRecords!.edges[0]?.node.targetId &&
+      !['pipelines', 'stages'].includes(kind)
+    )
+      return 'skipped';
     if (!archive.rdSourceRecords!.edges.length) {
       await this.client.mutation({
         createRdSourceRecord: {
@@ -94,7 +103,78 @@ export class RecordImporter {
       ['contacts', 'deals'].includes(kind) && organizationId
         ? await this.resolve(account, 'organizations', organizationId)
         : null;
-    if (kind === 'organizations') {
+    if (kind === 'pipelines') {
+      const existing = await this.client.query({
+        salesPipelines: {
+          __args: { first: 1, filter: { id: { eq: id } } },
+          edges: { node: { id: true } },
+        },
+      });
+      if (!existing.salesPipelines!.edges.length) {
+        await this.client.mutation({
+          createSalesPipeline: {
+            __args: {
+              data: { ...data, id } as CoreSchema.SalesPipelineCreateInput,
+            },
+            id: true,
+          },
+        });
+        created = true;
+      }
+      await this.views.ensure(id, String(record.name ?? 'Funil de vendas'));
+    } else if (kind === 'stages') {
+      const existing = await this.client.query({
+        salesStages: {
+          __args: { first: 1, filter: { id: { eq: id } } },
+          edges: { node: { id: true } },
+        },
+      });
+      if (!existing.salesStages!.edges.length) {
+        const pipeline = record.deal_pipeline as
+          { id?: string; _id?: string } | undefined;
+        const pipelineId = String(
+          record.pipeline_id ??
+            record.deal_pipeline_id ??
+            pipeline?.id ??
+            pipeline?._id ??
+            parentId,
+        );
+        if (!pipelineId) throw new Error('Missing source pipeline for stage.');
+        const salesPipelineId = await this.resolve(
+          account,
+          'pipelines',
+          pipelineId,
+        );
+        await this.client.mutation({
+          createSalesStage: {
+            __args: {
+              data: {
+                ...data,
+                id,
+                salesPipelineId,
+              } as CoreSchema.SalesStageCreateInput,
+            },
+            id: true,
+          },
+        });
+        created = true;
+      }
+      const pipeline = record.deal_pipeline as
+        { id?: string; _id?: string } | undefined;
+      const pipelineId = String(
+        record.pipeline_id ??
+          record.deal_pipeline_id ??
+          pipeline?.id ??
+          pipeline?._id ??
+          parentId,
+      );
+      if (!pipelineId) throw new Error('Missing source pipeline for stage.');
+      await this.views.addStage(
+        sourceId(`${account}:pipelines:${pipelineId}`),
+        id,
+        Number(data.sourceOrder ?? 0),
+      );
+    } else if (kind === 'organizations') {
       const existing = await this.client.query({
         companies: {
           __args: { first: 1, filter: { id: { eq: id } } },
@@ -166,6 +246,16 @@ export class RecordImporter {
             embeddedPipeline?.id ??
             '';
         }
+        const salesPipelineId = data.salesPipelineKey
+          ? await this.resolve(
+              account,
+              'pipelines',
+              String(data.salesPipelineKey),
+            )
+          : null;
+        const salesStageId = data.salesStageKey
+          ? await this.resolve(account, 'stages', String(data.salesStageKey))
+          : null;
         await this.client.mutation({
           createOpportunity: {
             __args: {
@@ -176,6 +266,8 @@ export class RecordImporter {
                 pointOfContactId,
                 ownerId,
                 rdOwnerName,
+                salesPipelineId,
+                salesStageId,
               } as CoreSchema.OpportunityCreateInput,
             },
             id: true,

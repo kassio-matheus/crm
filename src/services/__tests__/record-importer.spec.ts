@@ -2,6 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 import { RecordImporter } from '../record-importer';
 import { sourceId } from 'src/utils/source-id.util';
+vi.mock('src/services/native-pipeline-views', () => ({
+  NativePipelineViews: class {
+    ensure = vi.fn().mockResolvedValue(undefined);
+    addStage = vi.fn().mockResolvedValue(undefined);
+  },
+}));
 const query = vi.fn();
 const mutation = vi.fn();
 const client = { query, mutation } as unknown as CoreApiClient;
@@ -137,5 +143,78 @@ describe('RecordImporter', () => {
       .filter(([q]) => q.createRdSourceRecord)
       .map(([q]) => q.createRdSourceRecord.__args.data.id);
     expect(new Set(ids).size).toBe(2);
+  });
+});
+
+describe('native pipeline imports', () => {
+  it('upgrades an archived pipeline without overwriting a locally edited catalog', async () => {
+    query
+      .mockResolvedValueOnce({
+        rdSourceRecords: {
+          edges: [{ node: { id: 'archive', targetId: 'archive' } }],
+        },
+      })
+      .mockResolvedValueOnce({
+        salesPipelines: { edges: [{ node: { id: 'native' } }] },
+      });
+    expect(
+      await new RecordImporter(client).import(
+        'pipelines',
+        { id: 'p', name: 'Old source name' },
+        'acme',
+        'run',
+        false,
+      ),
+    ).toBe('skipped');
+    expect(mutation).toHaveBeenCalledTimes(1);
+    expect(
+      mutation.mock.calls[0][0].updateRdSourceRecord.__args.data.targetId,
+    ).toBe(sourceId('acme:pipelines:p'));
+  });
+  it('creates a native stage linked to its pipeline and preserves order', async () => {
+    query
+      .mockResolvedValueOnce({ rdSourceRecords: { edges: [] } })
+      .mockResolvedValueOnce({ salesStages: { edges: [] } })
+      .mockResolvedValueOnce({
+        rdSourceRecords: { edges: [{ node: { targetId: 'pipeline-native' } }] },
+      });
+    await new RecordImporter(client).import(
+      'stages',
+      { id: 's', name: 'Contact', order: 3 },
+      'acme',
+      'run',
+      false,
+      'p',
+    );
+    expect(
+      mutation.mock.calls.find(([q]) => q.createSalesStage)?.[0],
+    ).toMatchObject({
+      createSalesStage: {
+        __args: {
+          data: { salesPipelineId: 'pipeline-native', sourceOrder: 3 },
+        },
+      },
+    });
+  });
+  it('stops a missing pipeline rather than losing the stage relationship', async () => {
+    query
+      .mockResolvedValueOnce({ rdSourceRecords: { edges: [] } })
+      .mockResolvedValueOnce({ salesStages: { edges: [] } })
+      .mockResolvedValueOnce({ rdSourceRecords: { edges: [] } });
+    await expect(
+      new RecordImporter(client).import(
+        'stages',
+        { id: 's' },
+        'acme',
+        'run',
+        false,
+        'missing',
+      ),
+    ).rejects.toThrow('Missing imported pipelines');
+    expect(
+      mutation.mock.calls.some(
+        ([q]) => q.createSalesStage || q.updateRdSourceRecord,
+      ),
+    ).toBe(false);
   });
 });

@@ -6,7 +6,9 @@ export default defineField({
   label: 'Stages',
   type: FieldType.RELATION,
   objectUniversalIdentifier: '50444479-e034-4fa5-8c38-2492629477bd',
-  relationTargetObjectMetadataUniversalIdentifier: '01f28af1-c4e7-4b83-8084-1640c8d25981',
-  relationTargetFieldMetadataUniversalIdentifier: '3c534548-a6b3-4bec-8717-7c399d286787',
+  relationTargetObjectMetadataUniversalIdentifier:
+    '01f28af1-c4e7-4b83-8084-1640c8d25981',
+  relationTargetFieldMetadataUniversalIdentifier:
+    '3c534548-a6b3-4bec-8717-7c399d286787',
   universalSettings: { relationType: RelationType.ONE_TO_MANY },
 });

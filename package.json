@@ -18,7 +18,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run --config vitest.unit.config.ts",
-    "setup:workspace": "node scripts/setup-workspace.mjs"
+    "setup:workspace": "node scripts/setup-workspace.mjs",
+    "configure:native-sales": "node scripts/configure-native-sales.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.7.2",

@@ -105,3 +105,18 @@ describe('source task clock time', () => {
       ),
     ).toThrow('hour'));
 });
+
+describe('native pipeline catalog mapping', () => {
+  it('projects pipelines without adding opportunity-only fields', () =>
+    expect(
+      mapRdRecord('pipelines', { name: 'Vendas' }, 'a:pipelines:1'),
+    ).toEqual({ name: 'Vendas', sourceKey: 'a:pipelines:1' }));
+  it('preserves the source stage order', () =>
+    expect(
+      mapRdRecord('stages', { name: 'Contato', order: 2 }, 'a:stages:1'),
+    ).toEqual({ name: 'Contato', sourceKey: 'a:stages:1', sourceOrder: 2 }));
+  it('rejects invalid ordering before creating metadata', () =>
+    expect(() => mapRdRecord('stages', { order: NaN }, 'key')).toThrow(
+      'stage order',
+    ));
+});

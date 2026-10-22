@@ -5,5 +5,6 @@ export default defineField({
   name: 'nextActivityAt',
   label: 'Próxima tarefa',
   type: FieldType.DATE_TIME,
+  isUIEditable: false,
   objectUniversalIdentifier: '20202020-9549-49dd-b2b2-883999db8938',
 });

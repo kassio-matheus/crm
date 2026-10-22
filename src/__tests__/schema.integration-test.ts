@@ -4,6 +4,7 @@ import { MetadataApiClient } from 'twenty-client-sdk/metadata';
 import { APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
 import { AttachmentImporter } from 'src/services/attachment-importer';
 import { RecordImporter } from 'src/services/record-importer';
+import { NativeSalesMaintenance } from 'src/services/native-sales-maintenance';
 import { sourceId } from 'src/utils/source-id.util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -17,6 +18,18 @@ const cleanup: { kind: string; id: string }[] = [];
 afterAll(async () => {
   // Only fixtures with this run's random account are destroyed. The app is never uninstalled.
   for (const item of cleanup.reverse()) {
+    if (item.kind === 'stages')
+      await client.mutation({
+        destroySalesStage: { __args: { id: item.id }, id: true },
+      });
+    if (item.kind === 'pipelines')
+      await new MetadataApiClient().mutation({
+        deleteView: { __args: { id: item.id }, id: true },
+      });
+    if (item.kind === 'pipelines')
+      await client.mutation({
+        destroySalesPipeline: { __args: { id: item.id }, id: true },
+      });
     if (item.kind === 'attachments')
       await client.mutation({
         destroyAttachment: { __args: { id: item.id }, id: true },
@@ -73,6 +86,23 @@ describe('Additive Twenty installation', () => {
 describe('Database-backed migration', () => {
   beforeAll(async () => {
     await importer.import(
+      'pipelines',
+      { id: 'pipeline', name: 'Integration pipeline' },
+      account,
+      'test',
+      false,
+    );
+    cleanup.push({ kind: 'pipelines', id: nativeId('pipelines', 'pipeline') });
+    await importer.import(
+      'stages',
+      { id: 'stage', name: 'Contact', order: 1 },
+      account,
+      'test',
+      false,
+      'pipeline',
+    );
+    cleanup.push({ kind: 'stages', id: nativeId('stages', 'stage') });
+    await importer.import(
       'organizations',
       { id: 'org', name: 'Integration company', custom: { retained: true } },
       account,
@@ -103,6 +133,8 @@ describe('Database-backed migration', () => {
         name: 'Integration sale',
         amount_total: 399.83,
         win: null,
+        stage_id: 'stage',
+        pipeline_id: 'pipeline',
         organization: { id: 'org' },
         contacts: [{ id: 'person' }],
         created_at: '2020-01-01T00:00:00Z',
@@ -122,6 +154,8 @@ describe('Database-backed migration', () => {
           node: {
             id: true,
             companyId: true,
+            salesPipelineId: true,
+            salesStageId: true,
             pointOfContactId: true,
             amount: { amountMicros: true },
             rdCreatedAt: true,
@@ -133,6 +167,8 @@ describe('Database-backed migration', () => {
     expect(result.opportunities!.edges).toHaveLength(1);
     expect(result.opportunities!.edges[0].node).toMatchObject({
       companyId: nativeId('organizations', 'org'),
+      salesPipelineId: nativeId('pipelines', 'pipeline'),
+      salesStageId: nativeId('stages', 'stage'),
       pointOfContactId: nativeId('contacts', 'person'),
       amount: { amountMicros: 399830000 },
       rdCreatedAt: '2020-01-01T00:00:00.000Z',
@@ -389,5 +425,82 @@ describe('Authenticated app routes', () => {
     const body = await result.text();
     expect(result.status, body.slice(0, 300)).toBe(200);
     expect(body).not.toContain('does not have permission');
+  });
+});
+
+describe('Native sales behavior', () => {
+  it('updates the next pending activity after native task creation and completion', async () => {
+    const id = nativeId('deals', 'deal');
+    await importer.import(
+      'tasks',
+      {
+        id: 'pending',
+        subject: 'Native pending task',
+        deal_id: 'deal',
+        date: '2026-12-01T12:00:00Z',
+        done: false,
+      },
+      account,
+      'native',
+      false,
+    );
+    cleanup.push({ kind: 'tasks', id: nativeId('tasks', 'pending') });
+    const maintenance = new NativeSalesMaintenance(client);
+    await maintenance.forTasks([nativeId('tasks', 'pending')]);
+    const readDate = async () => {
+      const r = await client.query({
+        opportunities: {
+          __args: { first: 1, filter: { id: { eq: id } } },
+          edges: { node: { nextActivityAt: true } },
+        },
+      });
+      return r.opportunities!.edges[0].node.nextActivityAt;
+    };
+    expect(await readDate()).toBe('2026-12-01T12:00:00.000Z');
+    await client.mutation({
+      updateTask: {
+        __args: { id: nativeId('tasks', 'pending'), data: { status: 'DONE' } },
+        id: true,
+      },
+    });
+    await maintenance.forTasks([nativeId('tasks', 'pending')]);
+    expect(await readDate()).toBeNull();
+  });
+  it('supports native stage moves and preserves the original source stage and commercial status', async () => {
+    await importer.import(
+      'stages',
+      { id: 'stage2', name: 'Proposal', order: 2 },
+      account,
+      'native',
+      false,
+      'pipeline',
+    );
+    cleanup.push({ kind: 'stages', id: nativeId('stages', 'stage2') });
+    const id = nativeId('deals', 'deal');
+    await client.mutation({
+      updateOpportunity: {
+        __args: { id, data: { salesStageId: nativeId('stages', 'stage2') } },
+        id: true,
+      },
+    });
+    await new NativeSalesMaintenance(client).syncPipeline(id, true);
+    const read = await client.query({
+      opportunities: {
+        __args: { first: 1, filter: { id: { eq: id } } },
+        edges: {
+          node: {
+            salesStageId: true,
+            salesPipelineId: true,
+            salesStageKey: true,
+            dealStatus: true,
+          },
+        },
+      },
+    });
+    expect(read.opportunities!.edges[0].node).toMatchObject({
+      salesStageId: nativeId('stages', 'stage2'),
+      salesPipelineId: nativeId('pipelines', 'pipeline'),
+      salesStageKey: 'stage',
+    });
   });
 });

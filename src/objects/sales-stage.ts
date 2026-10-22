@@ -10,7 +10,8 @@ export default defineObject({
   labelSingular: 'Etapa do funil',
   labelPlural: 'Etapas dos funis',
   icon: 'IconBox',
-  labelIdentifierFieldMetadataUniversalIdentifier: NAME_FIELD_UNIVERSAL_IDENTIFIER,
+  labelIdentifierFieldMetadataUniversalIdentifier:
+    NAME_FIELD_UNIVERSAL_IDENTIFIER,
   fields: [
     {
       universalIdentifier: NAME_FIELD_UNIVERSAL_IDENTIFIER,

@@ -16,6 +16,13 @@ export const mapRdRecord = (
     return new Date(value).toISOString();
   };
   const common = { rdSourceKey: key, rdOriginalData: sanitizeSource(record) };
+  if (kind === 'pipelines') return { name: text(record.name), sourceKey: key };
+  if (kind === 'stages') {
+    const order = record.order ?? record.position ?? 0;
+    if (typeof order !== 'number' || !Number.isFinite(order))
+      throw new Error('Invalid source stage order.');
+    return { name: text(record.name), sourceKey: key, sourceOrder: order };
+  }
   if (kind === 'organizations')
     return {
       ...common,

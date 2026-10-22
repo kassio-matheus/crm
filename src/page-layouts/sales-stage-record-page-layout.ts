@@ -1,4 +1,8 @@
-import { definePageLayout, PageLayoutTabLayoutMode, PageLayoutType } from 'twenty-sdk/define';
+import {
+  definePageLayout,
+  PageLayoutTabLayoutMode,
+  PageLayoutType,
+} from 'twenty-sdk/define';
 
 export default definePageLayout({
   universalIdentifier: '665f7bc2-aea5-47a9-b0d4-b13820b958b4',

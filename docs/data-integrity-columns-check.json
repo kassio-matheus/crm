@@ -1,0 +1,61 @@
+{
+  "comparison": "Read-only comparison by record ID and column name against the backup taken before the pipeline column and native picker corrections. All business and catalog fields are unchanged.",
+  "tables": [
+    {
+      "table": "_salesPipeline",
+      "before": 1,
+      "after": 1,
+      "missing": 0,
+      "added": 0,
+      "changed": 0
+    },
+    {
+      "table": "_salesStage",
+      "before": 3,
+      "after": 3,
+      "missing": 0,
+      "added": 0,
+      "changed": 0
+    },
+    {
+      "table": "company",
+      "before": 599,
+      "after": 599,
+      "missing": 0,
+      "added": 0,
+      "changed": 0
+    },
+    {
+      "table": "note",
+      "before": 1800,
+      "after": 1800,
+      "missing": 0,
+      "added": 0,
+      "changed": 0
+    },
+    {
+      "table": "opportunity",
+      "before": 151,
+      "after": 151,
+      "missing": 0,
+      "added": 0,
+      "changed": 0
+    },
+    {
+      "table": "person",
+      "before": 1200,
+      "after": 1200,
+      "missing": 0,
+      "added": 0,
+      "changed": 0
+    },
+    {
+      "table": "task",
+      "before": 1800,
+      "after": 1800,
+      "missing": 0,
+      "added": 0,
+      "changed": 0
+    }
+  ]
+}

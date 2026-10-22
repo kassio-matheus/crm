@@ -1,5 +1,12 @@
 # Changelog
 
+## Pipeline column and picker correction — 2026-10-22
+
+- Reconcile every ordered pipeline stage after native catalog changes, including empty, moved, deleted and restored stages; keep saved pipeline aliases in sync.
+- Restore hidden columns and normalize duplicate/gapped source orders. Verify deterministic metadata after concurrent importer/selector/event creation attempts.
+- Repair existing boards without changing business records. Protect managed boards from Edit/Delete in the native picker with a version-checked Twenty v2.50.1 host adaptation, included in Railway image builds.
+- Validate with 152 unit cases, 18 isolated database integration cases and 10 deployment/picker cases.
+
 ## Unreleased
 
 ### Pipeline stages, direct actions and Railway preparation — 2026-10-22
@@ -12,7 +19,6 @@
 - Fix runtime use of build-time SDK constants in native pipeline provisioning and attachment uploads.
 - Add pinned Railway production images/configuration, startup preflight, manual protected app deployment and production/backup instructions.
 - Bootstrap metadata without replacing the live UI with temporary stubs.
-
 
 ### Native Twenty sales workspace correction — 2026-10-22
 

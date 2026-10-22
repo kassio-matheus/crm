@@ -86,6 +86,7 @@ describe('Additive Twenty installation', () => {
 
 describe('Database-backed migration', () => {
   beforeAll(async () => {
+    cleanup.push({ kind: 'pipelines', id: nativeId('pipelines', 'pipeline') });
     await importer.import(
       'pipelines',
       { id: 'pipeline', name: 'Integration pipeline' },
@@ -93,7 +94,6 @@ describe('Database-backed migration', () => {
       'test',
       false,
     );
-    cleanup.push({ kind: 'pipelines', id: nativeId('pipelines', 'pipeline') });
     await importer.import(
       'stages',
       { id: 'stage', name: 'Contact', order: 1 },

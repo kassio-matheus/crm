@@ -85,27 +85,36 @@ export class NativePipelineViews {
         });
     }
     if (!views.getViews.some((v) => v.id === pipelineId))
-      await this.metadata.mutation({
-        createView: {
-          __args: {
-            input: {
-              id: pipelineId,
-              name,
-              objectMetadataId: object.id,
-              type: 'KANBAN',
-              // The pinned Twenty host protects managed boards with this native lock icon.
-              icon: 'IconLock',
-              mainGroupByFieldMetadataId: field('salesStage'),
-              kanbanAggregateOperation: 'SUM',
-              kanbanAggregateOperationFieldMetadataId: field('amount'),
-              kanbanColumnWidth: 290,
-              shouldHideEmptyGroups: false,
-              position: -30,
+      await this.createOnce(
+        () =>
+          this.metadata.mutation({
+            createView: {
+              __args: {
+                input: {
+                  id: pipelineId,
+                  name,
+                  objectMetadataId: object.id,
+                  type: 'KANBAN',
+                  // The pinned Twenty host protects managed boards with this native lock icon.
+                  icon: 'IconLock',
+                  mainGroupByFieldMetadataId: field('salesStage'),
+                  kanbanAggregateOperation: 'SUM',
+                  kanbanAggregateOperationFieldMetadataId: field('amount'),
+                  kanbanColumnWidth: 290,
+                  shouldHideEmptyGroups: false,
+                  position: -30,
+                },
+              },
+              id: true,
             },
-          },
-          id: true,
-        },
-      });
+          }),
+        async () =>
+          (
+            await this.metadata.query({
+              getViews: { __args: { objectMetadataId: object.id }, id: true },
+            })
+          ).getViews.some((v) => v.id === pipelineId),
+      );
     else {
       const view = views.getViews.find((v) => v.id === pipelineId)!;
       if (
@@ -152,58 +161,98 @@ export class NativePipelineViews {
       'amount',
     ].entries())
       if (!current.getViewFields.some((f) => f.fieldMetadataId === field(name)))
-        await this.metadata.mutation({
-          createViewField: {
-            __args: {
-              input: {
-                id: sourceId(`native-view-field:${pipelineId}:${name}`),
-                viewId: pipelineId,
-                fieldMetadataId: field(name),
-                position,
-                isVisible: true,
-                size: 180,
+        await this.createOnce(
+          () =>
+            this.metadata.mutation({
+              createViewField: {
+                __args: {
+                  input: {
+                    id: sourceId(`native-view-field:${pipelineId}:${name}`),
+                    viewId: pipelineId,
+                    fieldMetadataId: field(name),
+                    position,
+                    isVisible: true,
+                    size: 180,
+                  },
+                },
+                id: true,
               },
-            },
-            id: true,
-          },
-        });
+            }),
+          async () =>
+            (
+              await this.metadata.query({
+                getViewFields: {
+                  __args: { viewId: pipelineId },
+                  fieldMetadataId: true,
+                },
+              })
+            ).getViewFields.some((f) => f.fieldMetadataId === field(name)),
+        );
     if (
       !current.getViewFilters.some(
         (f) => f.fieldMetadataId === field('salesPipeline'),
       )
     )
-      await this.metadata.mutation({
-        createViewFilter: {
-          __args: {
-            input: {
-              id: sourceId(`native-view-filter:${pipelineId}`),
-              viewId: pipelineId,
-              fieldMetadataId: field('salesPipeline'),
-              operand: 'IS',
-              // Twenty stores filter values as serialized JSON; the generated scalar is too narrow.
-              value: JSON.stringify([pipelineId]) as unknown as Record<
-                string,
-                unknown
-              >,
+      await this.createOnce(
+        () =>
+          this.metadata.mutation({
+            createViewFilter: {
+              __args: {
+                input: {
+                  id: sourceId(`native-view-filter:${pipelineId}`),
+                  viewId: pipelineId,
+                  fieldMetadataId: field('salesPipeline'),
+                  operand: 'IS',
+                  // Twenty stores filter values as serialized JSON; the generated scalar is too narrow.
+                  value: JSON.stringify([pipelineId]) as unknown as Record<
+                    string,
+                    unknown
+                  >,
+                },
+              },
+              id: true,
             },
-          },
-          id: true,
-        },
-      });
+          }),
+        async () =>
+          (
+            await this.metadata.query({
+              getViewFilters: {
+                __args: { viewId: pipelineId },
+                fieldMetadataId: true,
+              },
+            })
+          ).getViewFilters.some(
+            (f) => f.fieldMetadataId === field('salesPipeline'),
+          ),
+      );
     if (!current.getViewSorts.length)
-      await this.metadata.mutation({
-        createViewSort: {
-          __args: {
-            input: {
-              id: sourceId(`native-view-sort:${pipelineId}`),
-              viewId: pipelineId,
-              fieldMetadataId: field('rdCreatedAt'),
-              direction: 'DESC',
+      await this.createOnce(
+        () =>
+          this.metadata.mutation({
+            createViewSort: {
+              __args: {
+                input: {
+                  id: sourceId(`native-view-sort:${pipelineId}`),
+                  viewId: pipelineId,
+                  fieldMetadataId: field('rdCreatedAt'),
+                  direction: 'DESC',
+                },
+              },
+              id: true,
             },
-          },
-          id: true,
-        },
-      });
+          }),
+        async () =>
+          (
+            await this.metadata.query({
+              getViewSorts: {
+                __args: { viewId: pipelineId },
+                fieldMetadataId: true,
+              },
+            })
+          ).getViewSorts.some(
+            (f) => f.fieldMetadataId === field('rdCreatedAt'),
+          ),
+      );
   }
   async addStage(pipelineId: string, stageId: string, position: number) {
     const groups = await this.metadata.query({
@@ -226,20 +275,32 @@ export class NativePipelineViews {
         },
       });
     else if (!existing)
-      await this.metadata.mutation({
-        createViewGroup: {
-          __args: {
-            input: {
-              id: sourceId(`native-view-group:${pipelineId}:${stageId}`),
-              viewId: pipelineId,
-              fieldValue: stageId,
-              position,
-              isVisible: true,
+      await this.createOnce(
+        () =>
+          this.metadata.mutation({
+            createViewGroup: {
+              __args: {
+                input: {
+                  id: sourceId(`native-view-group:${pipelineId}:${stageId}`),
+                  viewId: pipelineId,
+                  fieldValue: stageId,
+                  position,
+                  isVisible: true,
+                },
+              },
+              id: true,
             },
-          },
-          id: true,
-        },
-      });
+          }),
+        async () =>
+          (
+            await this.metadata.query({
+              getViewGroups: {
+                __args: { viewId: pipelineId },
+                fieldValue: true,
+              },
+            })
+          ).getViewGroups.some((g) => g.fieldValue === stageId),
+      );
   }
   async syncStages(
     pipelineId: string,
@@ -304,19 +365,43 @@ export class NativePipelineViews {
         },
       });
     else if (!unassigned)
-      await this.metadata.mutation({
-        createViewGroup: {
-          __args: {
-            input: {
-              id: sourceId(`native-view-unassigned:${pipelineId}`),
-              viewId: pipelineId,
-              fieldValue: '',
-              position: -1,
-              isVisible: false,
+      await this.createOnce(
+        () =>
+          this.metadata.mutation({
+            createViewGroup: {
+              __args: {
+                input: {
+                  id: sourceId(`native-view-unassigned:${pipelineId}`),
+                  viewId: pipelineId,
+                  fieldValue: '',
+                  position: -1,
+                  isVisible: false,
+                },
+              },
+              id: true,
             },
-          },
-          id: true,
-        },
-      });
+          }),
+        async () =>
+          (
+            await this.metadata.query({
+              getViewGroups: {
+                __args: { viewId: pipelineId },
+                fieldValue: true,
+              },
+            })
+          ).getViewGroups.some((g) => g.fieldValue === ''),
+      );
+  }
+  /** A competing importer/selector/catalog event may have completed the same
+   * deterministic creation. Only swallow an error after verifying that result. */
+  private async createOnce(
+    create: () => Promise<unknown>,
+    exists: () => Promise<boolean>,
+  ) {
+    try {
+      await create();
+    } catch (error) {
+      if (!(await exists())) throw error;
+    }
   }
 }

@@ -1,0 +1,125 @@
+import {
+  defineView,
+  STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS as objects,
+} from 'twenty-sdk/define';
+import { NATIVE_SALES } from 'src/constants/native-sales';
+export default defineView({
+  universalIdentifier: NATIVE_SALES.fields,
+  name: 'Detalhes da negociação',
+  objectUniversalIdentifier: objects.opportunity.universalIdentifier,
+  type: 'FIELDS_WIDGET',
+  icon: 'IconListDetails',
+  fieldGroups: [
+    {
+      universalIdentifier: 'f2582868-9cbc-4599-91b0-d5f35eb7eebb',
+      name: 'Negociação',
+      position: 0,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: '45b1ca22-2b66-488f-bbf0-9101a9299f2c',
+      name: 'Acompanhamento',
+      position: 1,
+      isVisible: true,
+    },
+    {
+      universalIdentifier: '98bc9aa4-5787-4767-b138-d293f218ed92',
+      name: 'Origem RD Station',
+      position: 2,
+      isVisible: true,
+    },
+  ],
+  fields: [
+    {
+      universalIdentifier: '9f487862-9bb1-410a-a8db-2f9e766746a1',
+      fieldMetadataUniversalIdentifier: '66319b43-c953-44c5-a21d-591b36b76dfb',
+      position: 0,
+      isVisible: true,
+      size: 180,
+      viewFieldGroupUniversalIdentifier: 'f2582868-9cbc-4599-91b0-d5f35eb7eebb',
+    },
+    {
+      universalIdentifier: 'fd616cb7-8d5e-419f-9e81-d7c980b66aef',
+      fieldMetadataUniversalIdentifier:
+        objects.opportunity.fields.stage.universalIdentifier,
+      position: 1,
+      isVisible: false,
+      size: 180,
+      viewFieldGroupUniversalIdentifier: 'f2582868-9cbc-4599-91b0-d5f35eb7eebb',
+    },
+    {
+      universalIdentifier: '246e51b9-6acf-4e88-86de-56d4067166ed',
+      fieldMetadataUniversalIdentifier: '2f8ee9bf-9b4f-4a61-8f98-aaff48b12890',
+      position: 2,
+      isVisible: true,
+      size: 180,
+      viewFieldGroupUniversalIdentifier: 'f2582868-9cbc-4599-91b0-d5f35eb7eebb',
+    },
+    {
+      universalIdentifier: '4508f954-20e3-4d74-910a-acb6017a833d',
+      fieldMetadataUniversalIdentifier: 'c82c6820-3f44-4a52-946f-dd923cc03f74',
+      position: 3,
+      isVisible: true,
+      size: 180,
+      viewFieldGroupUniversalIdentifier: 'f2582868-9cbc-4599-91b0-d5f35eb7eebb',
+    },
+    {
+      universalIdentifier: 'a364acd5-0b24-4615-bd0f-0f6f9afd03cb',
+      fieldMetadataUniversalIdentifier: '9ff18b50-b15c-475b-b0ed-9e104000a470',
+      position: 4,
+      isVisible: true,
+      size: 180,
+      viewFieldGroupUniversalIdentifier: 'f2582868-9cbc-4599-91b0-d5f35eb7eebb',
+    },
+    {
+      universalIdentifier: '62c70ab7-a43e-4022-b421-b3c6e9f174f5',
+      fieldMetadataUniversalIdentifier:
+        objects.opportunity.fields.amount.universalIdentifier,
+      position: 5,
+      isVisible: true,
+      size: 180,
+      viewFieldGroupUniversalIdentifier: 'f2582868-9cbc-4599-91b0-d5f35eb7eebb',
+    },
+    {
+      universalIdentifier: '091637c0-0c84-405c-ad66-bc9affc4c52b',
+      fieldMetadataUniversalIdentifier:
+        objects.opportunity.fields.closeDate.universalIdentifier,
+      position: 6,
+      isVisible: true,
+      size: 180,
+      viewFieldGroupUniversalIdentifier: 'f2582868-9cbc-4599-91b0-d5f35eb7eebb',
+    },
+    {
+      universalIdentifier: 'ab6ff2a8-2d50-4f31-b7a5-d485da074fd2',
+      fieldMetadataUniversalIdentifier: 'fd10d713-2304-4ac1-82d5-a6eb1a0d6e3d',
+      position: 7,
+      isVisible: true,
+      size: 180,
+      viewFieldGroupUniversalIdentifier: '45b1ca22-2b66-488f-bbf0-9101a9299f2c',
+    },
+    {
+      universalIdentifier: 'f276c3d5-4ed9-4f4a-8dfc-ebe4ac45641d',
+      fieldMetadataUniversalIdentifier: '627b6d6a-fe73-4c6a-9d80-0d3f8b604253',
+      position: 8,
+      isVisible: true,
+      size: 180,
+      viewFieldGroupUniversalIdentifier: '45b1ca22-2b66-488f-bbf0-9101a9299f2c',
+    },
+    {
+      universalIdentifier: '5d4b0fce-cb4d-44a4-8e74-cc74b97d5489',
+      fieldMetadataUniversalIdentifier: '4cfc1f93-cd08-4e4b-bec4-fb7dd152edb5',
+      position: 9,
+      isVisible: true,
+      size: 180,
+      viewFieldGroupUniversalIdentifier: '98bc9aa4-5787-4767-b138-d293f218ed92',
+    },
+    {
+      universalIdentifier: '0da6098b-e481-43a4-bbdd-45a3718454a6',
+      fieldMetadataUniversalIdentifier: '021c3c1d-d94d-4f5e-9dc0-b130614062ed',
+      position: 10,
+      isVisible: true,
+      size: 180,
+      viewFieldGroupUniversalIdentifier: '98bc9aa4-5787-4767-b138-d293f218ed92',
+    },
+  ],
+});

@@ -1,0 +1,42 @@
+name: Deploy approved Twenty app
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: twenty-production
+  cancel-in-progress: false
+jobs:
+  deploy-and-install:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      TWENTY_DEPLOY_URL: ${{ vars.TWENTY_DEPLOY_URL }}
+      TWENTY_DEPLOY_API_KEY: ${{ secrets.TWENTY_DEPLOY_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: npm install --global twenty@2.49.0
+      - name: Configure the approved production remote
+        run: |
+          node --input-type=module <<'JS'
+          import { mkdirSync, writeFileSync } from 'node:fs';
+          import { homedir } from 'node:os';
+          import { join } from 'node:path';
+          const url = new URL(process.env.TWENTY_DEPLOY_URL);
+          if (url.protocol !== 'https:' || ['localhost', '127.0.0.1'].includes(url.hostname) || !process.env.TWENTY_DEPLOY_API_KEY) throw new Error('Configure the production URL and key in the protected environment.');
+          const directory = join(homedir(), '.twenty');
+          mkdirSync(directory, { recursive: true });
+          writeFileSync(join(directory, 'config.json'), JSON.stringify({ version: 1, defaultRemote: 'production', remotes: { production: { apiUrl: url.origin, apiKey: process.env.TWENTY_DEPLOY_API_KEY, twentyCLIAccessToken: process.env.TWENTY_DEPLOY_API_KEY } } }), { mode: 0o600 });
+          JS
+      - name: Bootstrap additive metadata and generate the workspace SDK
+        run: yarn setup:workspace --model-only
+      - run: yarn typecheck && yarn lint && yarn test:unit && yarn test:deployment
+      - run: yarn twenty dev:build
+      - run: yarn twenty app:publish --private --remote production
+      - run: yarn twenty app:install --remote production
+      - run: yarn configure:native-sales --locale pt-BR

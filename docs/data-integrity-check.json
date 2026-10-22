@@ -1,0 +1,45 @@
+{
+  "comparison": "All business fields, matched by record ID and column name, before and after pipeline stages, status actions, BRL defaults and sidebar configuration. Read-only comparison against the pre-change backup.",
+  "tables": [
+    {
+      "table": "company",
+      "before": 599,
+      "after": 599,
+      "missing": 0,
+      "added": 0,
+      "changed": 0
+    },
+    {
+      "table": "note",
+      "before": 1800,
+      "after": 1800,
+      "missing": 0,
+      "added": 0,
+      "changed": 0
+    },
+    {
+      "table": "opportunity",
+      "before": 151,
+      "after": 151,
+      "missing": 0,
+      "added": 0,
+      "changed": 0
+    },
+    {
+      "table": "person",
+      "before": 1200,
+      "after": 1200,
+      "missing": 0,
+      "added": 0,
+      "changed": 0
+    },
+    {
+      "table": "task",
+      "before": 1800,
+      "after": 1800,
+      "missing": 0,
+      "added": 0,
+      "changed": 0
+    }
+  ]
+}

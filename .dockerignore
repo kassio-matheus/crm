@@ -1,0 +1,6 @@
+*
+!deploy/
+!deploy/railway/
+!deploy/railway/Dockerfile
+!deploy/railway/preflight.mjs
+!deploy/railway/entrypoint.sh

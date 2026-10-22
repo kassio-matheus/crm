@@ -1,0 +1,23 @@
+--- a/packages/twenty-front/src/modules/views/view-picker/components/ViewPickerOptionDropdown.tsx
++++ b/packages/twenty-front/src/modules/views/view-picker/components/ViewPickerOptionDropdown.tsx
+@@ -37,6 +37,7 @@
+     | 'visibility'
+     | 'createdByUserWorkspaceId'
+     | 'applicationId'
++    | 'type'
+   >;
+   onEdit: (event: React.MouseEvent<HTMLElement>, viewId: string) => void;
+   handleViewSelect: (viewId: string) => void;
+@@ -68,8 +69,11 @@
+   const { deleteManyNavigationMenuItems } = useDeleteManyNavigationMenuItems();
+ 
+   // Users without VIEWS permission can only edit unlisted views (which are always their own, filtered by backend)
++  // Managed pipeline boards are maintained by the app, not the view picker.
++  const isManagedPipelineView = view.type === 'KANBAN' && view.icon === 'IconLock';
+   const canEditView =
+-    hasViewsPermission || view.visibility === ViewVisibility.UNLISTED;
++    !isManagedPipelineView &&
++    (hasViewsPermission || view.visibility === ViewVisibility.UNLISTED);
+ 
+   const currentNavigationMenuItem = navigationMenuItems.find(
+     (item) =>

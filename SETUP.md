@@ -13,12 +13,14 @@ Use the bounded sync commands; do not leave `yarn twenty dev` watching partial e
 
 ```sh
 mkdir -p .twenty/backups
-docker exec twenty-app-dev pg_dump -h localhost -U postgres -d default -Fc > .twenty/backups/before-rd-crm.dump
+docker exec twenty-app-dev pg_dump -h /tmp -U postgres -d default -Fc > .twenty/backups/before-rd-crm.dump
 ```
 
 On a fresh workspace, `twenty-client-sdk` is a placeholder. Run `yarn setup:workspace`: it syncs only the additive data model from an isolated temporary folder, preserving the live UI, generates the workspace SDK, then immediately applies the complete app. All identifiers stay stable. Both syncs use `--no-delete`. This also works against a configured self-hosted remote; inspect the active remote before running it.
 
 Install the standalone Twenty CLI (`npm install -g twenty`) for the one-time native workspace configuration. After the full app has been applied, run `yarn configure:native-sales`. It sets native sales labels, the six-item sidebar, side-panel opening, stage-based grouping for existing boards and BRL defaults for a PT-BR workspace, without converting existing monetary values. Original settings are saved locally in `.twenty/backups/native-sales/<object-id>/`. Repeating it is idempotent. Use `--locale` to select a different workspace language; other locales preserve existing monetary defaults.
+
+The managed pipeline dropdown also needs the small [native host adaptation](deploy/native-ui/README.md). It preserves the native picker and removes Edit/Delete for managed boards. Run `yarn configure:native-host` against the running development container, wait for its restart to finish, then refresh the browser. Repeat after recreating that container. Railway installs this adaptation during the image build.
 
 For subsequent edits:
 
@@ -28,7 +30,7 @@ yarn twenty apply --no-delete
 yarn configure:native-sales
 ```
 
-Open Negociações or Importar do RD Station from the sidebar. Negociações is the native Twenty opportunity screen; the Funil / Filtros action opens the selected pipeline directly as native stage columns and applies transient filters/sorts. Native pipeline views are created during import and prepared on selection for manually created catalogs. Save the actual RD credentials only through the import page. An administrator needs the Applications settings permission to save credentials and operate the import. Model/credit settings for the native AI remain configured in Twenty.
+Open Negociações or Importar do RD Station from the sidebar. Negociações is the native Twenty opportunity screen; the Funil / Filtros action opens the selected pipeline directly as native stage columns and applies transient filters/sorts. Native pipeline views are created during import and automatically reconciled after pipeline/stage catalog changes, including empty, moved, deleted and restored stages. Existing pipeline view aliases are reconciled too. Pipeline selection also repairs its columns. Save the actual RD credentials only through the import page. An administrator needs the Applications settings permission to save credentials and operate the import. Model/credit settings for the native AI remain configured in Twenty.
 
 ## Isolated integration tests
 

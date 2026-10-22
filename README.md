@@ -24,7 +24,7 @@ Select deals and use **Priorizar negociações com IA** in the command menu to p
 | Tasks, including completed tasks                                 | Native tasks and links to their deals                                                                                                                 |
 | Notes/history exposed as v1 activities                           | Native notes linked to their deals                                                                                                                    |
 | Users without a matching Twenty email                            | Original owner ID/name retained; no users are invited automatically                                                                                   |
-| Products, campaigns, sources, loss reasons, teams, custom fields | Original structured source snapshots on the import page under **Ver registros da importação**                                                             |
+| Products, campaigns, sources, loss reasons, teams, custom fields | Original structured source snapshots on the import page under **Ver registros da importação**                                                         |
 | Deal products and additional contacts                            | Deal-scoped source snapshots, preserving associations                                                                                                 |
 | API v2 meetings, meeting availability and proposals              | Original structured source snapshots                                                                                                                  |
 | API v2 attachments                                               | Native attachments and binary copies linked to the deal; up to 50 MB each                                                                             |
@@ -39,7 +39,7 @@ This is a one-time, create-only migration, not bidirectional synchronization. It
 
 Original payloads are retained for reconciliation, with secret-looking fields removed recursively. Metadata/custom data retained as snapshots is not automatically converted into arbitrary Twenty field definitions. Additional deal contacts remain available in the archive; only the primary contact becomes Twenty's point of contact.
 
-Native database events maintain the next pending task date for sorting and keep pipeline/stage relations consistent after native edits. They never rewrite original RD snapshots or change the commercial status. Importing pipelines provisions native saved views and columns without overwriting existing view customizations.
+Native database events maintain the next pending task date for sorting and keep pipeline/stage relations consistent after native edits. They never rewrite original RD snapshots or change the commercial status. Pipeline/stage database events maintain ordered visible columns, including empty stages and existing native aliases. Managed pipeline boards show a lock icon; the small [native host adaptation](deploy/native-ui/README.md) removes Edit/Delete from their picker menu. Names and columns follow the pipeline catalog; other native view customizations remain available.
 
 ## Safety and recovery
 
@@ -64,7 +64,8 @@ yarn install --immutable
 yarn setup:workspace     # metadata first, generate SDK, then full app
 yarn twenty plan
 yarn twenty apply --no-delete
-yarn configure:native-sales # one-time native navigation/side-panel configuration
+yarn configure:native-sales # native navigation, side panel and pipeline columns
+yarn configure:native-host # local Docker picker protection; restarts Twenty
 yarn test:unit
 yarn typecheck
 yarn lint

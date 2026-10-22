@@ -12,15 +12,15 @@ A imagem foi construída localmente e a verificação de configuração foi test
 
 No mesmo projeto e ambiente Railway, crie:
 
-| Serviço | Origem/configuração | Persistência e acesso |
-| --- | --- | --- |
-| `Postgres` | PostgreSQL 16, conforme a composição oficial do Twenty | Volume persistente, backups programados, conexão pela rede privada |
-| `Redis` | Redis, com `--maxmemory-policy noeviction` | Volume e persistência AOF (`--appendonly yes`); sem domínio público |
-| `Storage` | Bucket privado S3 compatível do Railway | Arquivos compartilhados pelo servidor e worker |
-| `Twenty` | Este GitHub repo, branch de release revisada | Configuração `/deploy/railway/railway.server.json` |
-| `Twenty Worker` | O mesmo repo e commit do servidor | Configuração `/deploy/railway/railway.worker.json`; sem domínio público |
+| Serviço         | Origem/configuração                                    | Persistência e acesso                                                   |
+| --------------- | ------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `Postgres`      | PostgreSQL 16, conforme a composição oficial do Twenty | Volume persistente, backups programados, conexão pela rede privada      |
+| `Redis`         | Redis, com `--maxmemory-policy noeviction`             | Volume e persistência AOF (`--appendonly yes`); sem domínio público     |
+| `Storage`       | Bucket privado S3 compatível do Railway                | Arquivos compartilhados pelo servidor e worker                          |
+| `Twenty`        | Este GitHub repo, branch de release revisada           | Configuração `/deploy/railway/railway.server.json`                      |
+| `Twenty Worker` | O mesmo repo e commit do servidor                      | Configuração `/deploy/railway/railway.worker.json`; sem domínio público |
 
-Nos dois serviços do repo, deixe **Root Directory** na raiz e selecione o caminho de configuração correspondente em Settings → Config as Code. O Dockerfile já referencia a imagem oficial; ele não compila o monorepo do Twenty. Gere um domínio HTTPS apenas para `Twenty`, com porta alvo **3000**. O servidor usa `/healthz` para liberar o deploy; o worker usa `/app/railway-entrypoint.sh yarn worker:prod` (preservando a checagem mesmo com o override de start do Railway) e sua fila deve ser acompanhada pelos logs.
+Nos dois serviços do repo, deixe **Root Directory** na raiz e selecione o caminho de configuração correspondente em Settings → Config as Code. O Dockerfile usa a imagem oficial fixada e aplica uma pequena adaptação no seletor nativo para ocultar Editar/Excluir dos quadros de funil gerenciados. O build confere a versão exata do frontend e falha se ela for incompatível. Ele não compila o monorepo do Twenty. Veja [a adaptação e sua manutenção](../deploy/native-ui/README.md). Gere um domínio HTTPS apenas para `Twenty`, com porta alvo **3000**. O servidor usa `/healthz` para liberar o deploy; o worker usa `/app/railway-entrypoint.sh yarn worker:prod` (preservando a checagem mesmo com o override de start do Railway) e sua fila deve ser acompanhada pelos logs.
 
 Ative primeiro banco e Redis; suba o servidor e aguarde `/healthz` responder, depois inicie o worker. Use uma réplica de cada processo inicialmente; as migrações e o registro de cron ficam apenas no servidor. Dimensione memória por métricas e valide uma importação representativa antes da abertura ao cliente.
 

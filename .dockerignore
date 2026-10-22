@@ -4,3 +4,7 @@
 !deploy/railway/Dockerfile
 !deploy/railway/preflight.mjs
 !deploy/railway/entrypoint.sh
+
+!deploy/native-ui/
+!deploy/native-ui/apply.mjs
+!deploy/native-ui/patch-picker.mjs

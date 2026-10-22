@@ -20,7 +20,8 @@
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "setup:workspace": "node scripts/setup-workspace.mjs",
     "configure:native-sales": "node scripts/configure-native-sales.mjs",
-    "test:deployment": "node --test deploy/railway/preflight.test.mjs"
+    "test:deployment": "node --test deploy/railway/preflight.test.mjs deploy/native-ui/patch-picker.test.mjs",
+    "configure:native-host": "node scripts/configure-native-host.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.7.2",

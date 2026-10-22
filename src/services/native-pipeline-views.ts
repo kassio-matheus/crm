@@ -1,8 +1,9 @@
 import { MetadataApiClient } from 'twenty-client-sdk/metadata';
 import { sourceId } from 'src/utils/source-id.util';
 
-/** Create-only native views: one board per pipeline, including its empty ordered stages. */
+/** Managed native views: one board per pipeline, including its empty ordered stages. */
 export class NativePipelineViews {
+  private relatedBoards: string[] = [];
   constructor(private metadata = new MetadataApiClient()) {}
   async ensure(pipelineId: string, name: string) {
     const objectResult = await this.metadata.query({
@@ -30,11 +31,59 @@ export class NativePipelineViews {
       getViews: {
         __args: { objectMetadataId: object.id },
         id: true,
+        name: true,
+        icon: true,
         type: true,
         mainGroupByFieldMetadataId: true,
         shouldHideEmptyGroups: true,
+        viewFilters: { fieldMetadataId: true, operand: true, value: true },
       },
     });
+    // Existing aliases in the native picker must follow catalog changes too.
+    // Otherwise selecting an older saved view still exposes stale columns.
+    this.relatedBoards = [];
+    for (const view of views.getViews) {
+      if (view.id === pipelineId || view.type !== 'KANBAN') continue;
+      const filter = view.viewFilters?.find(
+        (f) =>
+          f.fieldMetadataId === field('salesPipeline') && f.operand === 'IS',
+      );
+      let selected: unknown;
+      try {
+        const value =
+          typeof filter?.value === 'string'
+            ? JSON.parse(filter.value)
+            : filter?.value;
+        selected = Array.isArray(value) ? value : value?.selectedRecordIds;
+      } catch {
+        continue;
+      }
+      if (
+        !Array.isArray(selected) ||
+        selected.length !== 1 ||
+        selected[0] !== pipelineId
+      )
+        continue;
+      this.relatedBoards.push(view.id);
+      if (
+        view.mainGroupByFieldMetadataId !== field('salesStage') ||
+        view.shouldHideEmptyGroups ||
+        view.icon !== 'IconLock'
+      )
+        await this.metadata.mutation({
+          updateView: {
+            __args: {
+              id: view.id,
+              input: {
+                mainGroupByFieldMetadataId: field('salesStage'),
+                shouldHideEmptyGroups: false,
+                icon: 'IconLock',
+              },
+            },
+            id: true,
+          },
+        });
+    }
     if (!views.getViews.some((v) => v.id === pipelineId))
       await this.metadata.mutation({
         createView: {
@@ -44,7 +93,8 @@ export class NativePipelineViews {
               name,
               objectMetadataId: object.id,
               type: 'KANBAN',
-              icon: 'IconLayoutKanban',
+              // The pinned Twenty host protects managed boards with this native lock icon.
+              icon: 'IconLock',
               mainGroupByFieldMetadataId: field('salesStage'),
               kanbanAggregateOperation: 'SUM',
               kanbanAggregateOperationFieldMetadataId: field('amount'),
@@ -60,6 +110,8 @@ export class NativePipelineViews {
       const view = views.getViews.find((v) => v.id === pipelineId)!;
       if (
         view.type !== 'KANBAN' ||
+        view.name !== name ||
+        view.icon !== 'IconLock' ||
         view.mainGroupByFieldMetadataId !== field('salesStage') ||
         view.shouldHideEmptyGroups !== false
       )
@@ -69,6 +121,8 @@ export class NativePipelineViews {
               id: pipelineId,
               input: {
                 type: 'KANBAN',
+                name,
+                icon: 'IconLock',
                 mainGroupByFieldMetadataId: field('salesStage'),
                 shouldHideEmptyGroups: false,
               },
@@ -153,9 +207,25 @@ export class NativePipelineViews {
   }
   async addStage(pipelineId: string, stageId: string, position: number) {
     const groups = await this.metadata.query({
-      getViewGroups: { __args: { viewId: pipelineId }, fieldValue: true },
+      getViewGroups: {
+        __args: { viewId: pipelineId },
+        id: true,
+        fieldValue: true,
+        position: true,
+        isVisible: true,
+      },
     });
-    if (!groups.getViewGroups.some((g) => g.fieldValue === stageId))
+    const existing = groups.getViewGroups.find((g) => g.fieldValue === stageId);
+    if (existing && (existing.position !== position || !existing.isVisible))
+      await this.metadata.mutation({
+        updateViewGroup: {
+          __args: {
+            input: { id: existing.id, update: { position, isVisible: true } },
+          },
+          id: true,
+        },
+      });
+    else if (!existing)
       await this.metadata.mutation({
         createViewGroup: {
           __args: {
@@ -175,6 +245,13 @@ export class NativePipelineViews {
     pipelineId: string,
     stages: { id: string; order: number }[],
   ) {
+    for (const viewId of [pipelineId, ...this.relatedBoards])
+      await this.syncBoardStages(viewId, stages);
+  }
+  private async syncBoardStages(
+    pipelineId: string,
+    stages: { id: string; order: number }[],
+  ) {
     const current = await this.metadata.query({
       getViewGroups: {
         __args: { viewId: pipelineId },
@@ -184,18 +261,18 @@ export class NativePipelineViews {
         isVisible: true,
       },
     });
-    for (const stage of stages) {
+    for (const [position, stage] of stages.entries()) {
       const group = current.getViewGroups.find(
         (g) => g.fieldValue === stage.id,
       );
-      if (!group) await this.addStage(pipelineId, stage.id, stage.order);
-      else if (group.position !== stage.order || !group.isVisible)
+      if (!group) await this.addStage(pipelineId, stage.id, position);
+      else if (group.position !== position || !group.isVisible)
         await this.metadata.mutation({
           updateViewGroup: {
             __args: {
               input: {
                 id: group.id,
-                update: { position: stage.order, isVisible: true },
+                update: { position, isVisible: true },
               },
             },
             id: true,

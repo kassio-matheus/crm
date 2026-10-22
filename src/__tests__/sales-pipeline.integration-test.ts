@@ -22,11 +22,12 @@ afterAll(async () => {
         destroySalesStage: { __args: { id: item.id }, id: true },
       });
     if (item.object === 'pipeline') {
-      if (item.id === pipeline)
-        await metadata.mutation({ deleteView: { __args: { id: pipeline } } });
       await core.mutation({
         destroySalesPipeline: { __args: { id: item.id }, id: true },
       });
+      const views = await metadata.query({ getViews: { id: true } });
+      if (views.getViews.some((view) => view.id === item.id))
+        await metadata.mutation({ deleteView: { __args: { id: item.id } } });
     }
   }
 });

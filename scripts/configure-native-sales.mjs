@@ -103,59 +103,70 @@ if (!existsSync(backup))
   writeFileSync(backup, JSON.stringify({ object, home, navigation }, null, 2), {
     mode: 0o600,
   });
-let changed = 0;
-const receiptPath = join(directory, 'native-sales-layout-configured.json');
-const receipt = existsSync(receiptPath)
-  ? JSON.parse(readFileSync(receiptPath, 'utf8'))
-  : null;
-// This server returns the base openRecordIn enum even when a workspace override is stored.
-// Keep a local receipt so rerunning setup does not repeatedly write the same override.
-if (
-  (object.openRecordIn !== 'SIDE_PANEL' && receipt?.objectId !== object.id) ||
-  object.labelPlural !== 'Negociações'
-) {
-  request(
-    'mutation($input:UpdateOneObjectInput!){updateOneObject(input:$input){id}}',
-    {
-      input: {
-        id: object.id,
-        update: {
-          labelSingular: 'Negociação',
-          labelPlural: 'Negociações',
-          openRecordIn: 'SIDE_PANEL',
-          translations: [
-            { locale: 'pt-BR', property: 'labelSingular', value: 'Negociação' },
-            { locale: 'pt-BR', property: 'labelPlural', value: 'Negociações' },
-          ],
+const boardsOnly = process.argv.includes('--boards-only');
+if (!boardsOnly) {
+  let changed = 0;
+  const receiptPath = join(directory, 'native-sales-layout-configured.json');
+  const receipt = existsSync(receiptPath)
+    ? JSON.parse(readFileSync(receiptPath, 'utf8'))
+    : null;
+  // This server returns the base openRecordIn enum even when a workspace override is stored.
+  // Keep a local receipt so rerunning setup does not repeatedly write the same override.
+  if (
+    (object.openRecordIn !== 'SIDE_PANEL' && receipt?.objectId !== object.id) ||
+    object.labelPlural !== 'Negociações'
+  ) {
+    request(
+      'mutation($input:UpdateOneObjectInput!){updateOneObject(input:$input){id}}',
+      {
+        input: {
+          id: object.id,
+          update: {
+            labelSingular: 'Negociação',
+            labelPlural: 'Negociações',
+            openRecordIn: 'SIDE_PANEL',
+            translations: [
+              {
+                locale: 'pt-BR',
+                property: 'labelSingular',
+                value: 'Negociação',
+              },
+              {
+                locale: 'pt-BR',
+                property: 'labelPlural',
+                value: 'Negociações',
+              },
+            ],
+          },
         },
       },
-    },
+    );
+    changed++;
+  }
+  writeFileSync(
+    receiptPath,
+    JSON.stringify({ objectId: object.id, openRecordIn: 'SIDE_PANEL' }),
+    { mode: 0o600 },
   );
-  changed++;
-}
-writeFileSync(
-  receiptPath,
-  JSON.stringify({ objectId: object.id, openRecordIn: 'SIDE_PANEL' }),
-  { mode: 0o600 },
-);
-// The app summary becomes the pinned left column. Preserve the original complete details as a later tab.
-if (home.position !== 90 || home.title !== 'Todos os campos') {
-  request(
-    'mutation($id:String!,$input:UpdatePageLayoutTabInput!){updatePageLayoutTab(id:$id,input:$input){id}}',
-    { id: home.id, input: { position: 90, title: 'Todos os campos' } },
+  // The app summary becomes the pinned left column. Preserve the original complete details as a later tab.
+  if (home.position !== 90 || home.title !== 'Todos os campos') {
+    request(
+      'mutation($id:String!,$input:UpdatePageLayoutTabInput!){updatePageLayoutTab(id:$id,input:$input){id}}',
+      { id: home.id, input: { position: 90, title: 'Todos os campos' } },
+    );
+    changed++;
+  }
+  if (navigation && navigation.position !== 0) {
+    request(
+      'mutation($input:UpdateOneNavigationMenuItemInput!){updateNavigationMenuItem(input:$input){id}}',
+      { input: { id: navigation.id, update: { position: 0 } } },
+    );
+    changed++;
+  }
+  console.log(
+    `Native sales layout configured (${changed} changes). Original settings saved locally.`,
   );
-  changed++;
 }
-if (navigation && navigation.position !== 0) {
-  request(
-    'mutation($input:UpdateOneNavigationMenuItemInput!){updateNavigationMenuItem(input:$input){id}}',
-    { input: { id: navigation.id, update: { position: 0 } } },
-  );
-  changed++;
-}
-console.log(
-  `Native sales layout configured (${changed} changes). Original settings saved locally.`,
-);
 
 // Defaults are workspace metadata. No record values are rewritten.
 const localeArg = process.argv.indexOf('--locale');
@@ -175,93 +186,99 @@ const labels = {
   note: ['Nota', 'Notas'],
 };
 const allObjects = defaults.objects.edges.map((e) => e.node);
-const allowed = new Map();
-for (const [position, [name, [singular, plural]]] of Object.entries(
-  labels,
-).entries()) {
-  const target = allObjects.find((o) => o.nameSingular === name);
-  if (!target) throw new Error(`Missing native ${name} object.`);
-  allowed.set(target.id, { position, name: plural });
-  request(
-    'mutation($input:UpdateOneObjectInput!){updateOneObject(input:$input){id}}',
-    {
-      input: {
-        id: target.id,
-        update: {
-          labelSingular: singular,
-          labelPlural: plural,
-          translations: [
-            { locale: 'pt-BR', property: 'labelSingular', value: singular },
-            { locale: 'pt-BR', property: 'labelPlural', value: plural },
-          ],
-        },
-      },
-    },
-  );
-}
-for (const item of defaults.navigationMenuItems.filter(
-  (n) => !n.userWorkspaceId,
-)) {
-  const keep = allowed.get(item.targetObjectMetadataId);
-  if (keep && item.type === 'OBJECT') {
+if (!boardsOnly) {
+  const allowed = new Map();
+  for (const [position, [name, [singular, plural]]] of Object.entries(
+    labels,
+  ).entries()) {
+    const target = allObjects.find((o) => o.nameSingular === name);
+    if (!target) throw new Error(`Missing native ${name} object.`);
+    allowed.set(target.id, { position, name: plural });
     request(
-      'mutation($input:UpdateOneNavigationMenuItemInput!){updateNavigationMenuItem(input:$input){id}}',
+      'mutation($input:UpdateOneObjectInput!){updateOneObject(input:$input){id}}',
       {
         input: {
-          id: item.id,
-          update: { position: keep.position, name: keep.name, folderId: null },
-        },
-      },
-    );
-  } else if (
-    item.type === 'PAGE_LAYOUT' &&
-    ['Importar RD Station', 'Importar do RD Station'].includes(item.name)
-  ) {
-    request(
-      'mutation($input:UpdateOneNavigationMenuItemInput!){updateNavigationMenuItem(input:$input){id}}',
-      {
-        input: {
-          id: item.id,
+          id: target.id,
           update: {
-            position: 5,
-            name: 'Importar do RD Station',
-            folderId: null,
+            labelSingular: singular,
+            labelPlural: plural,
+            translations: [
+              { locale: 'pt-BR', property: 'labelSingular', value: singular },
+              { locale: 'pt-BR', property: 'labelPlural', value: plural },
+            ],
           },
         },
       },
     );
-  } else {
-    // Delete only sidebar shortcuts. Their objects, records, views and layouts are retained.
-    request('mutation($id:UUID!){deleteNavigationMenuItem(id:$id){id}}', {
-      id: item.id,
-    });
   }
-}
-if (locale.toLowerCase() === 'pt-br') {
-  for (const target of allObjects)
-    for (const field of target.fieldsList.filter(
-      (f) => f.type === 'CURRENCY',
-    )) {
-      if (field.defaultValue?.currencyCode === "'BRL'") continue;
+  for (const item of defaults.navigationMenuItems.filter(
+    (n) => !n.userWorkspaceId,
+  )) {
+    const keep = allowed.get(item.targetObjectMetadataId);
+    if (keep && item.type === 'OBJECT') {
       request(
-        'mutation($input:UpdateOneFieldMetadataInput!){updateOneField(input:$input){id}}',
+        'mutation($input:UpdateOneNavigationMenuItemInput!){updateNavigationMenuItem(input:$input){id}}',
         {
           input: {
-            id: field.id,
+            id: item.id,
             update: {
-              defaultValue: {
-                ...(field.defaultValue || {}),
-                currencyCode: "'BRL'",
-              },
+              position: keep.position,
+              name: keep.name,
+              folderId: null,
             },
           },
         },
       );
+    } else if (
+      item.type === 'PAGE_LAYOUT' &&
+      ['Importar RD Station', 'Importar do RD Station'].includes(item.name)
+    ) {
+      request(
+        'mutation($input:UpdateOneNavigationMenuItemInput!){updateNavigationMenuItem(input:$input){id}}',
+        {
+          input: {
+            id: item.id,
+            update: {
+              position: 5,
+              name: 'Importar do RD Station',
+              folderId: null,
+            },
+          },
+        },
+      );
+    } else {
+      // Delete only sidebar shortcuts. Their objects, records, views and layouts are retained.
+      request('mutation($id:UUID!){deleteNavigationMenuItem(id:$id){id}}', {
+        id: item.id,
+      });
     }
+  }
+  if (locale.toLowerCase() === 'pt-br') {
+    for (const target of allObjects)
+      for (const field of target.fieldsList.filter(
+        (f) => f.type === 'CURRENCY',
+      )) {
+        if (field.defaultValue?.currencyCode === "'BRL'") continue;
+        request(
+          'mutation($input:UpdateOneFieldMetadataInput!){updateOneField(input:$input){id}}',
+          {
+            input: {
+              id: field.id,
+              update: {
+                defaultValue: {
+                  ...(field.defaultValue || {}),
+                  currencyCode: "'BRL'",
+                },
+              },
+            },
+          },
+        );
+      }
+  }
+  console.log(
+    `Sales defaults configured for ${locale}: six workspace sidebar entries; ${locale.toLowerCase() === 'pt-br' ? 'BRL for new currency values' : 'currency defaults preserved'}.`,
+  );
 }
-console.log(
-  `Sales defaults configured for ${locale}: six workspace sidebar entries; ${locale.toLowerCase() === 'pt-br' ? 'BRL for new currency values' : 'currency defaults preserved'}.`,
-);
 
 // Upgrade existing native boards too, including user-created views with legacy phase grouping.
 const opportunity = allObjects.find((o) => o.nameSingular === 'opportunity');
@@ -287,7 +304,10 @@ const loadCatalog = (name, fields) => {
   return rows;
 };
 const pipelines = loadCatalog('salesPipelines', 'id name');
-const stages = loadCatalog('salesStages', 'id salesPipelineId sourceOrder');
+const stages = loadCatalog(
+  'salesStages',
+  'id name salesPipelineId sourceOrder',
+);
 const nativeViews = request(
   'query($id:String!){getViews(objectMetadataId:$id){id name type mainGroupByFieldMetadataId}}',
   { id: opportunity.id },
@@ -339,6 +359,7 @@ for (const view of nativeViews.filter((v) => v.type === 'KANBAN')) {
       id: view.id,
       input: {
         mainGroupByFieldMetadataId: stageField.id,
+        icon: 'IconLock',
         shouldHideEmptyGroups: false,
       },
     },
@@ -357,10 +378,30 @@ for (const view of nativeViews.filter((v) => v.type === 'KANBAN')) {
       },
     );
   const groups = request(
-    'query($id:String!){getViewGroups(viewId:$id){id fieldValue isVisible}}',
+    'query($id:String!){getViewGroups(viewId:$id){id fieldValue position isVisible}}',
     { id: view.id },
   ).getViewGroups;
-  const desired = stages.filter((s) => s.salesPipelineId === pipelineId);
+  const desired = stages
+    .filter((s) => s.salesPipelineId === pipelineId)
+    .sort(
+      (a, b) =>
+        (a.sourceOrder ?? Infinity) - (b.sourceOrder ?? Infinity) ||
+        (a.name || '').localeCompare(b.name || '') ||
+        a.id.localeCompare(b.id),
+    );
+  if (!groups.some((g) => !g.fieldValue))
+    request(
+      'mutation($input:CreateViewGroupInput!){createViewGroup(input:$input){id}}',
+      {
+        input: {
+          id: randomUUID(),
+          viewId: view.id,
+          fieldValue: '',
+          position: -1,
+          isVisible: false,
+        },
+      },
+    );
   for (const group of groups.filter((g) => !g.fieldValue && g.isVisible))
     request(
       'mutation($input:UpdateViewGroupInput!){updateViewGroup(input:$input){id}}',
@@ -372,8 +413,16 @@ for (const view of nativeViews.filter((v) => v.type === 'KANBAN')) {
         'mutation($input:DeleteViewGroupInput!){deleteViewGroup(input:$input){id}}',
         { input: { id: group.id } },
       );
-  for (const [index, stage] of desired.entries())
-    if (!groups.some((g) => g.fieldValue === stage.id))
+  for (const [index, stage] of desired.entries()) {
+    const group = groups.find((g) => g.fieldValue === stage.id);
+    if (group && (!group.isVisible || group.position !== index))
+      request(
+        'mutation($input:UpdateViewGroupInput!){updateViewGroup(input:$input){id}}',
+        {
+          input: { id: group.id, update: { isVisible: true, position: index } },
+        },
+      );
+    else if (!group)
       request(
         'mutation($input:CreateViewGroupInput!){createViewGroup(input:$input){id}}',
         {
@@ -381,11 +430,12 @@ for (const view of nativeViews.filter((v) => v.type === 'KANBAN')) {
             id: randomUUID(),
             viewId: view.id,
             fieldValue: stage.id,
-            position: stage.sourceOrder ?? index,
+            position: index,
             isVisible: true,
           },
         },
       );
+  }
 }
 console.log(
   'Existing native boards now group by their selected pipeline stages.',

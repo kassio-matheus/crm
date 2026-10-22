@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { CoreApiClient } from 'twenty-client-sdk/core';
+import { MetadataApiClient } from 'twenty-client-sdk/metadata';
 import { afterAll, describe, expect, it } from 'vitest';
 const client = new CoreApiClient();
 const ids = {
@@ -33,6 +34,11 @@ afterAll(async () => {
       await client.mutation({
         destroySalesPipeline: { __args: { id: ids[key] }, id: true },
       });
+  const metadata = new MetadataApiClient();
+  const views = await metadata.query({ getViews: { id: true } });
+  for (const id of [ids.pipeline, ids.otherPipeline])
+    if (views.getViews.some((view) => view.id === id))
+      await metadata.mutation({ deleteView: { __args: { id } } });
 });
 describe('Native database-event execution', () => {
   it('maintains task ordering and pipeline consistency using the actual queued app functions', async () => {

@@ -44,6 +44,8 @@ describe('native pipeline view provisioning', () => {
           input: {
             id: 'pipeline',
             type: 'KANBAN',
+            name: 'Vendas',
+            icon: 'IconLock',
             mainGroupByFieldMetadataId: 'salesStage',
             shouldHideEmptyGroups: false,
           },
@@ -65,6 +67,8 @@ describe('native pipeline view provisioning', () => {
           {
             id: 'pipeline',
             type: 'KANBAN',
+            name: 'Old source name',
+            icon: 'IconLock',
             mainGroupByFieldMetadataId: 'salesStage',
             shouldHideEmptyGroups: false,
           },
@@ -80,9 +84,11 @@ describe('native pipeline view provisioning', () => {
     expect(mutation).not.toHaveBeenCalled();
   });
   it('creates an ordered empty stage once', async () => {
-    query
-      .mockResolvedValueOnce({ getViewGroups: [] })
-      .mockResolvedValueOnce({ getViewGroups: [{ fieldValue: 'stage' }] });
+    query.mockResolvedValueOnce({ getViewGroups: [] }).mockResolvedValueOnce({
+      getViewGroups: [
+        { id: 'g', fieldValue: 'stage', position: 2, isVisible: true },
+      ],
+    });
     await service.addStage('pipeline', 'stage', 2);
     await service.addStage('pipeline', 'stage', 2);
     expect(mutation).toHaveBeenCalledTimes(1);
@@ -132,4 +138,125 @@ it('removes obsolete column metadata and reorders stages while keeping unassigne
       },
     },
   ]);
+});
+
+it('restores an existing hidden imported stage and applies its new position', async () => {
+  query.mockResolvedValue({
+    getViewGroups: [
+      { id: 'g', fieldValue: 'stage', position: 9, isVisible: false },
+    ],
+  });
+  await service.addStage('pipeline', 'stage', 1);
+  expect(mutation.mock.calls[0][0]).toMatchObject({
+    updateViewGroup: {
+      __args: { input: { id: 'g', update: { position: 1, isVisible: true } } },
+    },
+  });
+});
+
+it('uses consecutive column positions even when source orders collide or have gaps', async () => {
+  query.mockResolvedValueOnce({
+    getViewGroups: [
+      { id: 'a', fieldValue: 'stage-a', position: 9, isVisible: false },
+      { id: 'b', fieldValue: 'stage-b', position: 9, isVisible: true },
+      { id: 'null', fieldValue: '', position: -1, isVisible: false },
+    ],
+  });
+  await service.syncStages('pipeline', [
+    { id: 'stage-a', order: 9 },
+    { id: 'stage-b', order: 9 },
+  ]);
+  expect(
+    mutation.mock.calls.map(([r]) => r.updateViewGroup.__args.input.update),
+  ).toEqual([
+    { position: 0, isVisible: true },
+    { position: 1, isVisible: true },
+  ]);
+});
+
+it('keeps existing pipeline aliases in the native picker synchronized and ignores unrelated views', async () => {
+  query
+    .mockResolvedValueOnce({
+      objects: { edges: [{ node: { id: 'opportunity', fieldsList: fields } }] },
+    })
+    .mockResolvedValueOnce({
+      getViews: [
+        {
+          id: 'pipeline',
+          name: 'Vendas',
+          type: 'KANBAN',
+          icon: 'IconLock',
+          mainGroupByFieldMetadataId: 'salesStage',
+          shouldHideEmptyGroups: false,
+        },
+        {
+          id: 'alias',
+          type: 'KANBAN',
+          icon: 'IconLayoutKanban',
+          mainGroupByFieldMetadataId: 'stage',
+          shouldHideEmptyGroups: true,
+          viewFilters: [
+            {
+              fieldMetadataId: 'salesPipeline',
+              operand: 'IS',
+              value: JSON.stringify({ selectedRecordIds: ['pipeline'] }),
+            },
+          ],
+        },
+        {
+          id: 'other',
+          type: 'KANBAN',
+          viewFilters: [
+            {
+              fieldMetadataId: 'salesPipeline',
+              operand: 'IS',
+              value: '["another"]',
+            },
+          ],
+        },
+        {
+          id: 'malformed',
+          type: 'KANBAN',
+          viewFilters: [
+            {
+              fieldMetadataId: 'salesPipeline',
+              operand: 'IS',
+              value: 'invalid JSON',
+            },
+          ],
+        },
+      ],
+    })
+    .mockResolvedValueOnce({
+      getViewFields: fields.map((f) => ({ fieldMetadataId: f.id })),
+      getViewFilters: [{ fieldMetadataId: 'salesPipeline' }],
+      getViewSorts: [{ fieldMetadataId: 'name' }],
+      getViewGroups: [{ id: 'null', fieldValue: '', isVisible: false }],
+    });
+  for (const id of ['canonical-group', 'alias-group'])
+    query.mockResolvedValueOnce({
+      getViewGroups: [
+        { id, fieldValue: 'stage-a', position: 9, isVisible: false },
+        { id: 'null', fieldValue: '', isVisible: false },
+      ],
+    });
+  await service.ensure('pipeline', 'Vendas');
+  await service.syncStages('pipeline', [{ id: 'stage-a', order: 5 }]);
+  expect(mutation.mock.calls[0][0]).toMatchObject({
+    updateView: {
+      __args: {
+        id: 'alias',
+        input: {
+          mainGroupByFieldMetadataId: 'salesStage',
+          icon: 'IconLock',
+          shouldHideEmptyGroups: false,
+        },
+      },
+    },
+  });
+  expect(
+    mutation.mock.calls
+      .slice(1)
+      .map(([r]) => r.updateViewGroup.__args.input.id),
+  ).toEqual(['canonical-group', 'alias-group']);
 });

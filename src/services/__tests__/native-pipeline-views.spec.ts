@@ -60,7 +60,16 @@ describe('native pipeline view provisioning', () => {
           edges: [{ node: { id: 'opportunity', fieldsList: fields } }],
         },
       })
-      .mockResolvedValueOnce({ getViews: [{ id: 'pipeline' }] })
+      .mockResolvedValueOnce({
+        getViews: [
+          {
+            id: 'pipeline',
+            type: 'KANBAN',
+            mainGroupByFieldMetadataId: 'salesStage',
+            shouldHideEmptyGroups: false,
+          },
+        ],
+      })
       .mockResolvedValueOnce({
         getViewFields: fields.map((f) => ({ fieldMetadataId: f.id })),
         getViewFilters: [{ fieldMetadataId: 'salesPipeline' }],
@@ -89,4 +98,37 @@ describe('native pipeline view provisioning', () => {
     await expect(service.ensure('p', 'Vendas')).rejects.toThrow('metadata');
     expect(mutation).not.toHaveBeenCalled();
   });
+});
+
+it('removes obsolete column metadata and reorders stages while keeping unassigned deals in the list', async () => {
+  query.mockResolvedValueOnce({
+    getViewGroups: [
+      { id: 'a', fieldValue: 'stage-a', position: 8, isVisible: true },
+      {
+        id: 'wrong',
+        fieldValue: 'other-pipeline-stage',
+        position: 0,
+        isVisible: true,
+      },
+      { id: 'null', fieldValue: '', position: -1, isVisible: true },
+    ],
+  });
+  await service.syncStages('pipeline', [{ id: 'stage-a', order: 0 }]);
+  expect(mutation.mock.calls.map(([r]) => r)).toEqual([
+    {
+      updateViewGroup: {
+        __args: {
+          input: { id: 'a', update: { position: 0, isVisible: true } },
+        },
+        id: true,
+      },
+    },
+    { deleteViewGroup: { __args: { input: { id: 'wrong' } }, id: true } },
+    {
+      updateViewGroup: {
+        __args: { input: { id: 'null', update: { isVisible: false } } },
+        id: true,
+      },
+    },
+  ]);
 });

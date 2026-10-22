@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { defineFrontComponent } from 'twenty-sdk/define';
+import { navigate, AppPath } from 'twenty-sdk/front-component';
 import { MetadataApiClient } from 'twenty-client-sdk/metadata';
 import { Button, Input } from 'twenty-ui/primitives/input';
 import { IconDownload, IconPlayerPause, IconRefresh } from 'twenty-ui/icon';
@@ -416,6 +417,18 @@ const ImportPage = () => {
           </p>
         </section>
       )}
+      <Button
+        onClick={() =>
+          void navigate(
+            AppPath.RecordIndexPage,
+            { objectNamePlural: 'rdSourceRecords' },
+            {},
+            { surface: 'main' },
+          )
+        }
+      >
+        Ver registros da importação
+      </Button>
     </main>
   );
 };

@@ -14,6 +14,15 @@ export default definePageLayoutTab({
   layoutMode: 'VERTICAL_LIST',
   widgets: [
     {
+      universalIdentifier: '58ebfef5-cb5b-4e56-b545-73d2b54cc1c8',
+      title: 'Ações da negociação',
+      type: 'FRONT_COMPONENT',
+      configuration: {
+        configurationType: 'FRONT_COMPONENT',
+        frontComponentUniversalIdentifier: '9587b472-567f-4502-862b-7443b053f79e',
+      },
+    },
+    {
       universalIdentifier: '68c2ff1f-5e48-4284-ad2e-a04bba10f1bf',
       title: 'Negociação',
       type: 'FIELDS',

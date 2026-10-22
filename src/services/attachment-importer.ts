@@ -2,7 +2,6 @@ import { Buffer } from 'node:buffer';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 import { MetadataApiClient } from 'twenty-client-sdk/metadata';
 import { kv } from 'twenty-sdk/logic-function';
-import { STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS } from 'twenty-sdk/define';
 
 /** Copies signed RD file downloads into native Twenty attachments without forwarding RD credentials. */
 export class AttachmentImporter {
@@ -94,8 +93,7 @@ export class AttachmentImporter {
             size,
             fileFolder: 'FilesField',
             fieldMetadataUniversalIdentifier:
-              STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.attachment.fields.file
-                .universalIdentifier,
+              '20202020-15db-460e-8166-c7b5d87ad4be',
           },
           fileId: true,
           uploadUrl: true,

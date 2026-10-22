@@ -1,5 +1,4 @@
 import { MetadataApiClient } from 'twenty-client-sdk/metadata';
-import { STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS } from 'twenty-sdk/define';
 import { sourceId } from 'src/utils/source-id.util';
 
 /** Create-only native views: one board per pipeline, including its empty ordered stages. */
@@ -11,8 +10,8 @@ export class NativePipelineViews {
         __args: {
           filter: {
             universalIdentifier: {
-              eq: STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.opportunity
-                .universalIdentifier,
+              // Define-time SDK exports are stubbed in deployed function bundles.
+              eq: '20202020-9549-49dd-b2b2-883999db8938',
             },
           },
           paging: { first: 1 },
@@ -28,7 +27,13 @@ export class NativePipelineViews {
       return match.id;
     };
     const views = await this.metadata.query({
-      getViews: { __args: { objectMetadataId: object.id }, id: true },
+      getViews: {
+        __args: { objectMetadataId: object.id },
+        id: true,
+        type: true,
+        mainGroupByFieldMetadataId: true,
+        shouldHideEmptyGroups: true,
+      },
     });
     if (!views.getViews.some((v) => v.id === pipelineId))
       await this.metadata.mutation({
@@ -45,11 +50,33 @@ export class NativePipelineViews {
               kanbanAggregateOperationFieldMetadataId: field('amount'),
               kanbanColumnWidth: 290,
               shouldHideEmptyGroups: false,
+              position: -30,
             },
           },
           id: true,
         },
       });
+    else {
+      const view = views.getViews.find((v) => v.id === pipelineId)!;
+      if (
+        view.type !== 'KANBAN' ||
+        view.mainGroupByFieldMetadataId !== field('salesStage') ||
+        view.shouldHideEmptyGroups !== false
+      )
+        await this.metadata.mutation({
+          updateView: {
+            __args: {
+              id: pipelineId,
+              input: {
+                type: 'KANBAN',
+                mainGroupByFieldMetadataId: field('salesStage'),
+                shouldHideEmptyGroups: false,
+              },
+            },
+            id: true,
+          },
+        });
+    }
     const current = await this.metadata.query({
       getViewFields: { __args: { viewId: pipelineId }, fieldMetadataId: true },
       getViewFilters: { __args: { viewId: pipelineId }, fieldMetadataId: true },
@@ -131,6 +158,70 @@ export class NativePipelineViews {
               fieldValue: stageId,
               position,
               isVisible: true,
+            },
+          },
+          id: true,
+        },
+      });
+  }
+  async syncStages(
+    pipelineId: string,
+    stages: { id: string; order: number }[],
+  ) {
+    const current = await this.metadata.query({
+      getViewGroups: {
+        __args: { viewId: pipelineId },
+        id: true,
+        fieldValue: true,
+        position: true,
+        isVisible: true,
+      },
+    });
+    for (const stage of stages) {
+      const group = current.getViewGroups.find(
+        (g) => g.fieldValue === stage.id,
+      );
+      if (!group) await this.addStage(pipelineId, stage.id, stage.order);
+      else if (group.position !== stage.order || !group.isVisible)
+        await this.metadata.mutation({
+          updateViewGroup: {
+            __args: {
+              input: {
+                id: group.id,
+                update: { position: stage.order, isVisible: true },
+              },
+            },
+            id: true,
+          },
+        });
+    }
+    // Remove only obsolete column metadata. Records and stage catalogs are untouched.
+    for (const group of current.getViewGroups)
+      if (group.fieldValue && !stages.some((s) => s.id === group.fieldValue))
+        await this.metadata.mutation({
+          deleteViewGroup: { __args: { input: { id: group.id } }, id: true },
+        });
+    // Only actual stages are board columns. Unassigned deals stay available in the native list.
+    const unassigned = current.getViewGroups.find((g) => !g.fieldValue);
+    if (unassigned?.isVisible)
+      await this.metadata.mutation({
+        updateViewGroup: {
+          __args: {
+            input: { id: unassigned.id, update: { isVisible: false } },
+          },
+          id: true,
+        },
+      });
+    else if (!unassigned)
+      await this.metadata.mutation({
+        createViewGroup: {
+          __args: {
+            input: {
+              id: sourceId(`native-view-unassigned:${pipelineId}`),
+              viewId: pipelineId,
+              fieldValue: '',
+              position: -1,
+              isVisible: false,
             },
           },
           id: true,

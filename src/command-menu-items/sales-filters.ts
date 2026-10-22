@@ -7,7 +7,7 @@ import { NATIVE_SALES } from 'src/constants/native-sales';
 export default defineCommandMenuItem({
   universalIdentifier: NATIVE_SALES.filtersCommand,
   label: 'Filtrar negociações',
-  shortLabel: 'Filtros',
+  shortLabel: 'Funil / Filtros',
   isPinned: true,
   availabilityType: 'GLOBAL_OBJECT_CONTEXT',
   availabilityObjectUniversalIdentifier:

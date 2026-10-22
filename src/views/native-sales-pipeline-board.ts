@@ -6,18 +6,11 @@ import { NATIVE_SALES } from 'src/constants/native-sales';
 
 export default defineView({
   universalIdentifier: NATIVE_SALES.pipelineBoard,
-  name: 'Funis de vendas',
+  name: 'Todas as negociações · Lista',
   objectUniversalIdentifier: objects.opportunity.universalIdentifier,
-  type: 'KANBAN',
-  position: -19,
+  type: 'TABLE',
+  position: 10,
   icon: 'IconLayoutKanban',
-  mainGroupByFieldMetadataUniversalIdentifier:
-    'c82c6820-3f44-4a52-946f-dd923cc03f74',
-  shouldHideEmptyGroups: true,
-  kanbanColumnWidth: 290,
-  kanbanAggregateOperation: 'SUM',
-  kanbanAggregateOperationFieldMetadataUniversalIdentifier:
-    objects.opportunity.fields.amount.universalIdentifier,
   fields: [
     {
       universalIdentifier: 'ceabd080-27a2-4919-b111-20731b75cae9',

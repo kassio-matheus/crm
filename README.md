@@ -4,11 +4,13 @@ An additive Twenty app using the native Twenty sales workspace and a resumable R
 
 ## Use the app
 
-Open **Negociações** for Twenty's native opportunity kanban. Cards, dragging, inline editing, creation, list views and record side panels are rendered by Twenty. The **Filtros** quick action opens a compact native-themed panel for pipeline, owner, status, ordering and board/list selection. Applying filters changes only the current screen; it does not save a shared view. Use Twenty's advanced filter for additional criteria.
+Open **Negociações**, then **Funil / Filtros** and select a sales pipeline. It opens the native Twenty kanban with all of that pipeline's ordered stages, including empty columns. Cards, dragging, inline editing, creation, list views and record side panels are rendered by Twenty. Deals without a stage stay available in the native list; no pipeline or stage is assigned silently. Owner, independent status and sorting filters remain available without saving a shared view.
 
-The native record layout starts with an editable sales summary, followed by native contact, company and owner cards. Timeline, tasks, notes, files and email retain Twenty's standard tabs and actions. The original full details remain under **Todos os campos**. Technical catalogs and migration snapshots are grouped under **Configuração de vendas**. Status remains independent from pipeline stage.
+The native record layout starts with direct **Marcar perda**, **Marcar venda**, **Pausar/Retomar** actions, followed by the editable sales summary and native contact, company and owner cards. Colored status tags use symbols as well as text. Status actions never move the stage or change the amount. Timeline, tasks, notes, files and email retain Twenty's standard tabs and actions. The original full details remain under **Todos os campos**.
 
-Open **Importar RD Station** as a workspace administrator. Save the credentials, run the simulation, review its result, then start the import. Pause and resume from the same page. The page reports a failed/stalled worker as resumable rather than leaving it running forever.
+The default workspace sidebar contains **Negociações, Empresas, Contatos, Tarefas, Notas, Importar do RD Station**. Pipeline/stage configuration is accessible from the filter panel; import snapshots are accessible from the import page. PT-BR workspace setup sets BRL as the default for new monetary values, preserving existing currencies and amounts. This is a workspace default, not a per-user automatic locale switch.
+
+Open **Importar do RD Station** as a workspace administrator. Save the credentials, run the simulation, review its result, then start the import. Pause and resume from the same page. The page reports a failed/stalled worker as resumable rather than leaving it running forever.
 
 Select deals and use **Priorizar negociações com IA** in the command menu to prepare a prompt in Twenty's native AI panel. Review and send the prompt there. The existing read-only sales coach and recommendation function remain available; model/provider/credit settings stay in Twenty.
 
@@ -22,7 +24,7 @@ Select deals and use **Priorizar negociações com IA** in the command menu to p
 | Tasks, including completed tasks                                 | Native tasks and links to their deals                                                                                                                 |
 | Notes/history exposed as v1 activities                           | Native notes linked to their deals                                                                                                                    |
 | Users without a matching Twenty email                            | Original owner ID/name retained; no users are invited automatically                                                                                   |
-| Products, campaigns, sources, loss reasons, teams, custom fields | Original structured source snapshots in **Configuração de vendas → Registros RD Station**                                                             |
+| Products, campaigns, sources, loss reasons, teams, custom fields | Original structured source snapshots on the import page under **Ver registros da importação**                                                             |
 | Deal products and additional contacts                            | Deal-scoped source snapshots, preserving associations                                                                                                 |
 | API v2 meetings, meeting availability and proposals              | Original structured source snapshots                                                                                                                  |
 | API v2 attachments                                               | Native attachments and binary copies linked to the deal; up to 50 MB each                                                                             |
@@ -55,7 +57,7 @@ Create a PostgreSQL backup before installing into a populated workspace. `yarn t
 
 ## Development
 
-See [SETUP.md](SETUP.md) and [docs/VALIDATION.md](docs/VALIDATION.md).
+See [SETUP.md](SETUP.md), [validation](docs/VALIDATION.md) and the [Railway production guide](docs/RAILWAY.md).
 
 ```sh
 yarn install --immutable

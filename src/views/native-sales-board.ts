@@ -6,50 +6,11 @@ import { NATIVE_SALES } from 'src/constants/native-sales';
 
 export default defineView({
   universalIdentifier: NATIVE_SALES.board,
-  name: 'Negociações',
+  name: 'Todas as negociações',
   objectUniversalIdentifier: objects.opportunity.universalIdentifier,
-  type: 'KANBAN',
-  position: -20,
+  type: 'TABLE',
+  position: 0,
   icon: 'IconLayoutKanban',
-  mainGroupByFieldMetadataUniversalIdentifier:
-    objects.opportunity.fields.stage.universalIdentifier,
-  shouldHideEmptyGroups: false,
-  kanbanColumnWidth: 290,
-  kanbanAggregateOperation: 'SUM',
-  kanbanAggregateOperationFieldMetadataUniversalIdentifier:
-    objects.opportunity.fields.amount.universalIdentifier,
-  groups: [
-    {
-      universalIdentifier: '060b2a1a-74c6-4cb3-8002-b62f44e7a7ce',
-      fieldValue: 'NEW',
-      position: 0,
-      isVisible: true,
-    },
-    {
-      universalIdentifier: 'e1204370-4dc9-45ab-986e-9de73ea8f2d5',
-      fieldValue: 'SCREENING',
-      position: 1,
-      isVisible: true,
-    },
-    {
-      universalIdentifier: 'c6669b39-3e73-4f47-a4f8-2d12e1b1ecf3',
-      fieldValue: 'MEETING',
-      position: 2,
-      isVisible: true,
-    },
-    {
-      universalIdentifier: 'd5b38e1c-bc1e-428a-a1d0-f5ffc56994fc',
-      fieldValue: 'PROPOSAL',
-      position: 3,
-      isVisible: true,
-    },
-    {
-      universalIdentifier: '92c6c1d5-66f4-459d-b8c2-4d70f8787429',
-      fieldValue: 'CUSTOMER',
-      position: 4,
-      isVisible: true,
-    },
-  ],
   fields: [
     {
       universalIdentifier: '1363759b-0daa-48ca-bd9d-b64d1e4a86d7',

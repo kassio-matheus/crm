@@ -8,6 +8,7 @@ import {
 } from 'twenty-sdk/front-component';
 import { Button } from 'twenty-ui/primitives/input';
 import { useTheme } from 'twenty-ui/theme';
+import { RestApiClient } from 'twenty-client-sdk/rest';
 import { MAIN_PAGE_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
 import { Picker } from 'src/front-components/components/picker';
 import { loadSalesFilterOptions } from 'src/front-components/utils/load-sales-filter-options.util';
@@ -77,7 +78,23 @@ const SalesFilters = () => {
     setBusy(true);
     setError('');
     try {
-      const query = buildNativeSalesQuery(value, options.views);
+      const prepared =
+        value.pipelineId && value.mode === 'board'
+          ? await new RestApiClient().post('/s/prepare-sales-pipeline', {
+              pipelineId: value.pipelineId,
+            })
+          : null;
+      if (prepared && !(prepared as { viewId?: string }).viewId)
+        throw new Error('Pipeline preparation failed.');
+      const query = buildNativeSalesQuery(value, {
+        ...options.views,
+        pipelineViews: {
+          ...options.views.pipelineViews,
+          ...(value.pipelineId && prepared
+            ? { [value.pipelineId]: (prepared as { viewId: string }).viewId }
+            : {}),
+        },
+      });
       localStorage.setItem(`sales-filters:${userId}`, JSON.stringify(value));
       await navigate(
         AppPath.RecordIndexPage,
@@ -108,10 +125,12 @@ const SalesFilters = () => {
     >
       <div>
         <h2 style={{ fontSize: theme.font.size.lg, margin: 0 }}>
-          Filtrar negociações
+          Funil de vendas
         </h2>
         <p style={{ color: theme.font.color.secondary }}>
-          Escolha os critérios e aplique ao quadro ou à lista do Twenty.
+          Selecione o funil para abrir suas etapas em colunas. Cada coluna é uma
+          etapa; o status indica se a negociação está em andamento, vendida,
+          perdida ou pausada.
         </p>
       </div>
       {error && (
@@ -129,12 +148,30 @@ const SalesFilters = () => {
             label="Funil de vendas"
             value={filters.pipelineId}
             options={[
-              { value: '', label: 'Todas as negociações' },
+              { value: '', label: 'Todas as negociações · Lista' },
               ...options.pipelines.map((p) => ({ value: p.id, label: p.name })),
             ]}
-            onChange={(v) => change('pipelineId', v)}
+            onChange={(v) => {
+              const next = {
+                ...filters,
+                pipelineId: v,
+                mode: v ? ('board' as const) : ('list' as const),
+              };
+              setFilters(next);
+              void apply(next);
+            }}
             disabled={busy}
           />
+          {!options.pipelines.length && (
+            <p>
+              Você ainda não tem funis. Importe do RD Station ou cadastre um
+              funil e suas etapas abaixo.
+            </p>
+          )}
+          <p style={{ color: theme.font.color.secondary }}>
+            Negociações sem etapa continuam na Lista. Atribua uma etapa para
+            exibi-las no quadro.
+          </p>
           <Picker
             label="Responsável"
             value={filters.ownerId}
@@ -215,6 +252,34 @@ const SalesFilters = () => {
             Para combinar mais critérios, use o filtro avançado do Twenty no
             quadro.
           </p>
+          <div
+            style={{ display: 'flex', gap: theme.spacing[2], flexWrap: 'wrap' }}
+          >
+            <Button
+              onClick={() =>
+                void navigate(
+                  AppPath.RecordIndexPage,
+                  { objectNamePlural: 'salesPipelines' },
+                  {},
+                  { surface: 'main' },
+                )
+              }
+            >
+              Configurar funis
+            </Button>
+            <Button
+              onClick={() =>
+                void navigate(
+                  AppPath.RecordIndexPage,
+                  { objectNamePlural: 'salesStages' },
+                  {},
+                  { surface: 'main' },
+                )
+              }
+            >
+              Configurar etapas
+            </Button>
+          </div>
         </>
       )}
     </section>

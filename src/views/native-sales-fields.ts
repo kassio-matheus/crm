@@ -43,7 +43,7 @@ export default defineView({
       fieldMetadataUniversalIdentifier:
         objects.opportunity.fields.stage.universalIdentifier,
       position: 1,
-      isVisible: true,
+      isVisible: false,
       size: 180,
       viewFieldGroupUniversalIdentifier: 'f2582868-9cbc-4599-91b0-d5f35eb7eebb',
     },

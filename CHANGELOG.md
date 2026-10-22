@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Pipeline stages, direct actions and Railway preparation — 2026-10-22
+
+- Open the selected pipeline directly as a native board with all ordered stage columns; retain unassigned deals in the native list.
+- Repair legacy native board grouping, preserve commercial values and expose catalog configuration through filters.
+- Add colored status tags with symbols and direct won/lost/pause/resume buttons in the native record summary.
+- Set BRL monetary defaults for PT-BR workspaces without converting existing values.
+- Reduce the default work sidebar to deals, companies, contacts, tasks, notes and RD import.
+- Fix runtime use of build-time SDK constants in native pipeline provisioning and attachment uploads.
+- Add pinned Railway production images/configuration, startup preflight, manual protected app deployment and production/backup instructions.
+- Bootstrap metadata without replacing the live UI with temporary stubs.
+
+
 ### Native Twenty sales workspace correction — 2026-10-22
 
 - Remove the hand-built kanban, list, record detail and duplicated data repository.

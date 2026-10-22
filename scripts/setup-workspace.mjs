@@ -52,8 +52,6 @@ try {
     'objects',
     'views',
     'page-layouts',
-    'page-layout-tabs',
-    'navigation-menu-items',
     'roles',
     'agents',
     'skills',
@@ -65,73 +63,39 @@ try {
   for (const filename of ['application-config.ts', 'default-role.ts'])
     cpSync(join(root, 'src', filename), join(staging, 'src', filename));
   cpSync(join(root, 'public'), join(staging, 'public'), { recursive: true });
-  // Switching an existing PAGE_LAYOUT item to a new VIEW needs that view to exist first.
-  rmSync(
-    join(
-      staging,
-      'src/navigation-menu-items/main-page.navigation-menu-item.ts',
-    ),
-    { force: true },
+  // Metadata bootstrap must not replace live front components with temporary stubs.
+  // Omit UI that depends on them until the generated workspace SDK is available.
+  for (const filename of [
+    'main-page.page-layout.ts',
+    'rd-import.page-layout.ts',
+  ])
+    rmSync(join(staging, 'src', 'page-layouts', filename), { force: true });
+  const yarnLauncher =
+    process.env.npm_execpath ||
+    execFileSync('which', ['yarn'], { encoding: 'utf8' }).trim();
+  const shellLauncher = /^#!.*(?:sh|bash)(?:\s|$)/.test(
+    readFileSync(yarnLauncher, 'utf8').split('\n')[0],
   );
-  mkdirSync(join(staging, 'src', 'front-components'), { recursive: true });
-  for (const filename of ['main-page.tsx', 'rd-import-page.tsx']) {
-    const source = readFileSync(
-      join(root, 'src', 'front-components', filename),
-      'utf8',
+  const runYarn = (args) =>
+    execFileSync(
+      shellLauncher ? yarnLauncher : process.execPath,
+      shellLauncher ? args : [yarnLauncher, ...args],
+      { cwd: root, stdio: 'inherit' },
     );
-    const constants = readFileSync(
-      join(
-        root,
-        'src',
-        'constants',
-        filename === 'main-page.tsx'
-          ? 'universal-identifiers.ts'
-          : 'rd-identifiers.ts',
-      ),
-      'utf8',
-    );
-    const name =
-      filename === 'main-page.tsx'
-        ? 'MAIN_PAGE_FRONT_COMPONENT_UNIVERSAL_IDENTIFIER'
-        : 'IMPORT_COMPONENT';
-    const identifier = constants.match(
-      new RegExp(`${name}\\s*=\\s*'([^']+)'`),
-    )?.[1];
-    if (!identifier || !source.includes('defineFrontComponent'))
-      throw new Error('Missing stable component identifier.');
-    writeFileSync(
-      join(staging, 'src', 'front-components', filename),
-      `import { defineFrontComponent } from 'twenty-sdk/define';\nexport default defineFrontComponent({ universalIdentifier: '${identifier}', name: '${filename === 'main-page.tsx' ? 'Negociações' : 'rd-import-page'}', component: () => null });\n`,
-    );
-  }
-  execFileSync(
-    'yarn',
-    [
-      'twenty',
-      process.argv.includes('--plan-only') ? 'plan' : 'apply',
-      '--no-delete',
-      staging,
-    ],
-    {
-      cwd: root,
-      stdio: 'inherit',
-    },
-  );
+  runYarn([
+    'twenty',
+    process.argv.includes('--plan-only') ? 'plan' : 'apply',
+    '--no-delete',
+    staging,
+  ]);
   if (!process.argv.includes('--plan-only'))
-    execFileSync('yarn', ['twenty', 'dev:generate-client'], {
-      cwd: root,
-      stdio: 'inherit',
-    });
+    runYarn(['twenty', 'dev:generate-client']);
   if (
     process.argv.includes('--model-only') ||
     process.argv.includes('--plan-only')
   )
     process.exitCode = 0;
-  else
-    execFileSync('yarn', ['twenty', 'apply', '--no-delete'], {
-      cwd: root,
-      stdio: 'inherit',
-    });
+  else runYarn(['twenty', 'apply', '--no-delete']);
 } finally {
   rmSync(staging, { recursive: true, force: true });
 }

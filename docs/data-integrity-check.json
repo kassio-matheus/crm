@@ -1,0 +1,40 @@
+{
+  "comparison": "Existing business fields before and after the native UI correction; new nullable relation columns excluded.",
+  "tables": [
+    {
+      "table": "company",
+      "before": 599,
+      "after": 599,
+      "missing": 0,
+      "changed": 0
+    },
+    {
+      "table": "note",
+      "before": 1800,
+      "after": 1800,
+      "missing": 0,
+      "changed": 0
+    },
+    {
+      "table": "opportunity",
+      "before": 150,
+      "after": 150,
+      "missing": 0,
+      "changed": 0
+    },
+    {
+      "table": "person",
+      "before": 1200,
+      "after": 1200,
+      "missing": 0,
+      "changed": 0
+    },
+    {
+      "table": "task",
+      "before": 1800,
+      "after": 1800,
+      "missing": 0,
+      "changed": 0
+    }
+  ]
+}

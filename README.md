@@ -1,14 +1,16 @@
 # Twenty Sales CRM
 
-An additive Twenty app focused on RD Station-style sales pipelines and a resumable RD Station CRM migration. Source code and internal identifiers are English; the workspace UI is Portuguese.
+An additive Twenty app using the native Twenty sales workspace and a resumable RD Station CRM migration. Source code and internal identifiers are English; the workspace UI is Portuguese.
 
 ## Use the app
 
-Open **Negociações** in the Twenty sidebar for the board/list, pipeline, owner, status and ordering controls. Open a deal for its stage ribbon, owner, contact/company, pending tasks, notes, imported products and files. Status is independent from pipeline stage. Native opportunities, people, companies, tasks and notes remain available in Twenty's regular screens.
+Open **Negociações** for Twenty's native opportunity kanban. Cards, dragging, inline editing, creation, list views and record side panels are rendered by Twenty. The **Filtros** quick action opens a compact native-themed panel for pipeline, owner, status, ordering and board/list selection. Applying filters changes only the current screen; it does not save a shared view. Use Twenty's advanced filter for additional criteria.
+
+The native record layout starts with an editable sales summary, followed by native contact, company and owner cards. Timeline, tasks, notes, files and email retain Twenty's standard tabs and actions. The original full details remain under **Todos os campos**. Technical catalogs and migration snapshots are grouped under **Configuração de vendas**. Status remains independent from pipeline stage.
 
 Open **Importar RD Station** as a workspace administrator. Save the credentials, run the simulation, review its result, then start the import. Pause and resume from the same page. The page reports a failed/stalled worker as resumable rather than leaving it running forever.
 
-Use **Priorizar com IA** for recommendations through Twenty's native AI agent. Configure a model and credits in Twenty first. The app's sales coach role has read access only; recommendations never change a deal automatically. Up to 200 selected/filtered opportunities are analyzed per request.
+Select deals and use **Priorizar negociações com IA** in the command menu to prepare a prompt in Twenty's native AI panel. Review and send the prompt there. The existing read-only sales coach and recommendation function remain available; model/provider/credit settings stay in Twenty.
 
 ## Migration coverage
 
@@ -16,11 +18,11 @@ Use **Priorizar com IA** for recommendations through Twenty's native AI agent. C
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Organizations and contacts                                       | Native companies and people, including company relationship, emails and phones                                                                        |
 | Deals                                                            | Native opportunities, company, primary contact, matching native owner, amount, forecast, original creation date, qualification and independent status |
-| Pipelines and stages                                             | Preserved reference records used by the custom board, retaining order and pipeline membership                                                         |
+| Pipelines and stages                                             | Native pipeline/stage records and native saved kanban views, retaining ordered empty columns and pipeline membership                                  |
 | Tasks, including completed tasks                                 | Native tasks and links to their deals                                                                                                                 |
 | Notes/history exposed as v1 activities                           | Native notes linked to their deals                                                                                                                    |
 | Users without a matching Twenty email                            | Original owner ID/name retained; no users are invited automatically                                                                                   |
-| Products, campaigns, sources, loss reasons, teams, custom fields | Original structured source snapshots in **Registros RD Station**                                                                                      |
+| Products, campaigns, sources, loss reasons, teams, custom fields | Original structured source snapshots in **Configuração de vendas → Registros RD Station**                                                             |
 | Deal products and additional contacts                            | Deal-scoped source snapshots, preserving associations                                                                                                 |
 | API v2 meetings, meeting availability and proposals              | Original structured source snapshots                                                                                                                  |
 | API v2 attachments                                               | Native attachments and binary copies linked to the deal; up to 50 MB each                                                                             |
@@ -34,6 +36,8 @@ API v1 cannot guarantee complete listing beyond 10,000 records. This app fails e
 This is a one-time, create-only migration, not bidirectional synchronization. It never updates an already imported native business record or merges existing records by email/name. Native edits survive retries. Repeated external IDs are scoped to the company and resource kind; child products/files are also scoped to their deal. Preserve the company key and API version throughout a migration. The UI requires a completed simulation before live import.
 
 Original payloads are retained for reconciliation, with secret-looking fields removed recursively. Metadata/custom data retained as snapshots is not automatically converted into arbitrary Twenty field definitions. Additional deal contacts remain available in the archive; only the primary contact becomes Twenty's point of contact.
+
+Native database events maintain the next pending task date for sorting and keep pipeline/stage relations consistent after native edits. They never rewrite original RD snapshots or change the commercial status. Importing pipelines provisions native saved views and columns without overwriting existing view customizations.
 
 ## Safety and recovery
 
@@ -58,6 +62,7 @@ yarn install --immutable
 yarn setup:workspace     # metadata first, generate SDK, then full app
 yarn twenty plan
 yarn twenty apply --no-delete
+yarn configure:native-sales # one-time native navigation/side-panel configuration
 yarn test:unit
 yarn typecheck
 yarn lint

@@ -1,41 +1,39 @@
-# Validation record — 2026-10-21
+# Validation record — 2026-10-22
 
-The implementation is an additive Twenty app, not a fork of Twenty's server. The final migration uses native CRM records and preserves unsupported source structures as audit snapshots. It does not remove database records or owned metadata.
+The sales workspace now uses Twenty's native kanban, table, record side panel, field widgets, relation cards and activity tabs. The former hand-built kanban, list, detail component and full-dataset repository have been removed. The encrypted, resumable RD importer is preserved.
 
 ## Automated checks
 
-- **105 unit tests passed** across 18 files: status mapping; UUID determinism and namespaces; secret redaction; credential validation; source data/money/date/clock mapping; every ordering mode; v1/v2 HTTP contracts; rate-limit/Retry-After handling; OAuth rotation; hostile pagination URLs; the 10,000-record v1 boundary; source relationship recovery; upload size/truncation checks; command deduplication; paused/failed/timed-out workers; atomic counters/offsets; changed-source-page detection; paginated board reads; retry-safe tasks/notes; and native AI request validation.
-- **12 integration tests passed** against PostgreSQL and file storage at isolated `localhost:2021`: stable app registration; linked company/contact/deal migration; exact currency amounts; preserving local edits on replay; every independent status; simulation without business writes; invalid data rejection before writes; recovery from a missing company relation; retry-safe task/note links; conflicting contact email preservation; real binary upload into Twenty with one attachment link; and authenticated/unauthenticated import routes.
-- Typecheck, lint and the full unit suite also passed under Node 24.5.0, matching `.nvmrc`. The metadata plan reported **zero entities to destroy**. All syncs used `--no-delete`.
-- The metadata-first setup script was executed against the isolated instance. It preserved stable IDs, generated the SDK and restored the complete UI after its temporary page shells.
+- **132 unit tests passed** across 23 files. Coverage includes migration recovery, credential handling, RD limits and pagination, native filter serialization, catalog-only pagination, create-only native pipeline views and ordered groups, task-date derivation and pipeline/stage consistency.
+- **14 migration/database/storage/route integration tests passed** on isolated `localhost:2021`, including native pipeline/stage relationships, source preservation after stage moves and next-task ordering.
+- **1 additional integration test passed** using the actual queued database-event functions. Creating/linking a pending task populated its opportunity's next-task date; completing it cleared the date; changing a stage synchronized its pipeline while preserving commercial status and the original RD stage key.
+- Unit tests, the database-event test and final typecheck passed under Node **24.5.0**. Lint passed with no errors. The full migration suite also passed on the host's Node 26 runtime; the installed Yarn launcher uses a fixed interpreter, so Node 24 validation invokes that launcher through Node explicitly.
+- Every app sync used `--no-delete`. The final visual polish changed one front component with **0 entities to destroy**. Marking the derived next-task field non-editable also removed its automatically generated creation-form widget; no CRM field or business record was removed.
+- The isolated API key's real 100 requests/minute limit remains enabled. Tests pace calls and honor 429 responses. Fixture cleanup handles this server's Boolean `deleteView` result despite the SDK's older return type.
+- The 37 owned fixtures left by two interrupted test runs were removed from the isolated server using their random test account namespaces. Development records were excluded.
 
 ## Browser verification
 
-Verified in the actual Twenty remote-DOM renderer on localhost:2020:
+Verified through the actual Twenty UI, rather than a standalone mockup:
 
-- Sales board mounts and loads all pages of the seeded dataset (129 ongoing deals).
-- The Won filter displays 21 sold deals in the Customer stage.
-- The list view displays real company, stage, owner, status and currency values.
-- The deal detail renders its stage ribbon, owner, contact/company, task form and note/task/product/file tabs.
-- The dedicated import page renders the v1/v2 credentials, optional legacy history token, encrypted save flow, simulation/start/pause/resume controls and progress states.
-- The original function-management lookup failed in a front component. It was replaced by authenticated app HTTP routes, then verified in the browser and with integration tests.
+- The primary Negociações navigation opens the native opportunity route and kanban. Technical app entries are grouped separately.
+- The pinned Filtros command opens the side panel and loads catalogs without downloading every opportunity.
+- Applying the ongoing status changes native filters and column results. Twenty offers its normal Reset/Update view actions; the app does not save a shared view.
+- The native record side panel opens from a card with editable sales fields, native contact/company/owner cards and the standard activity tabs. The original complete details remain available.
+- An imported fixture pipeline opens as a native saved view, groups by its related stage record and shows native status/company/owner/amount fields.
+- Light and dark themes and a narrow viewport were checked. Filter controls retain visible labels and themed outlines; the original light preference was restored.
+- The importer remains a dedicated page. Actual customer RD credentials and paid AI inference were not used.
 
-Browser evidence: [sales board](screenshots/sales-board.png) and [import page](screenshots/rd-import.png). The final board uses independent column scrolling. Light mode and the narrow in-app browser viewport were verified; a visual dark-mode pass remains separate from the semantic theme-token implementation.
+Evidence: [native board](screenshots/sales-board.png), [native record side panel](screenshots/native-sales-side-panel.png), [filters](screenshots/native-sales-filters.png), [dark theme](screenshots/native-sales-filters-dark.png), [isolated imported fixture pipeline](screenshots/native-imported-pipeline.png), and [import page](screenshots/rd-import.png).
 
-## Database and environment safeguards
+## Database safeguards and limits
 
-A PostgreSQL custom-format backup is stored locally at `.twenty/backups/before-rd-crm.dump` (ignored by Git). The pre-existing `yarn twenty dev` watcher was interrupted so incomplete edits could not continue synchronizing.
+A read-only comparison against the pre-change backup verified **5,549 existing business records** (599 companies, 1,200 people, 150 opportunities, 1,800 tasks and 1,800 notes). Every pre-existing field value was unchanged; no record was missing or added in these tables. New nullable relation columns were excluded from the comparison. See [the integrity report](data-integrity-check.json).
 
-The separate test image initially failed to initialize its core schema. The isolated test database was recovered from a copy of the backup; the development database was not restored. Two all-in-one containers exceeded the Docker VM's roughly 4 GB memory allowance during one test run. The development container was temporarily stopped for the final isolated suite, then restarted; the test container was stopped afterwards.
+The local PostgreSQL backup before this correction is `.twenty/backups/before-native-sales.dump`; the initial migration backup is `.twenty/backups/before-rd-crm.dump`. Both are ignored by Git. The native layout configuration also saves its original settings locally and is idempotent. Native API metadata exposes the base record-opening enum on this server even when the workspace override is stored; the configuration retains a local receipt, and side-panel behavior was verified in the UI.
 
-The real file-storage test exposed a Twenty 2.49 SDK issue: `CoreApiClient.uploadFile` sends upload mutations to `/graphql`, while the server exposes them on `/metadata`. The importer now uses the typed metadata client for initiating/completing uploads and the core client for attachment records. A real text-file upload and link passed afterwards.
+Only the isolated test server received disposable business fixtures. The development container was stopped while the isolated tests ran to stay within Docker's memory allocation, then restarted. No database restore or direct SQL write was used for this correction. The app role has no business-record soft-delete or destroy permissions; derived-field functions update only the next-task date or pipeline/stage consistency.
 
-The app role is limited to the required sales objects, source snapshots, reading workspace members and specific application/AI/file capabilities. It has no soft-delete or destroy permission. The AI coach has read access only to opportunities, tasks and task links.
+No live company-wide RD migration was performed because no customer API credentials were supplied. API scopes, source/target reconciliation, source-specific custom fields, attachment availability and the existing migration coverage limits still require validation against the customer's account. Source structures retained as snapshots are not automatically converted into arbitrary native fields or commerce modules. Twenty AI model/provider/credits still require instance configuration.
 
-## Validation still requiring customer configuration
-
-No real RD company credential was supplied. A live company-wide migration, source/target count reconciliation and source-specific custom-field review therefore remain to be performed through the import page. Tests use official API contracts and controlled responses; they cannot establish the customer's API scopes, plan availability, file-host domains, source duplicates or dataset completeness.
-
-The native AI's provider/model/credit configuration was not invoked against a paid model. Its role, input contract and integration are built and tested; real inference depends on the instance's AI configuration.
-
-Keep RD read-only during the migration window. Review source/target counts and archived unsupported structures before cancelling RD. API coverage, v1 limits, file size/domain constraints and intentionally unsupported resources are documented in the README; a completed source listing is not a claim that unavailable email contents or permissions were transferred.
+The RD browser session was inspected read-only. No RD records, tasks, statuses or values were changed.

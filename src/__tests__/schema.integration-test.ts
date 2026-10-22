@@ -24,7 +24,8 @@ afterAll(async () => {
       });
     if (item.kind === 'pipelines')
       await new MetadataApiClient().mutation({
-        deleteView: { __args: { id: item.id }, id: true },
+        // This server returns Boolean; SDK 2.49 still types the result as View.
+        deleteView: { __args: { id: item.id } },
       });
     if (item.kind === 'pipelines')
       await client.mutation({

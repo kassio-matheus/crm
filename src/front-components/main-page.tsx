@@ -175,6 +175,14 @@ const SalesFilters = () => {
           >
             <Button
               variant="solid"
+              style={{
+                background: theme.background.invertedPrimary,
+                color: theme.font.color.inverted,
+                padding: `${theme.spacing[2]} ${theme.spacing[3]}`,
+                minHeight: 36,
+                borderRadius: theme.border.radius.sm,
+                border: 'none',
+              }}
               disabled={busy}
               onClick={() => void apply(filters)}
             >
@@ -182,6 +190,14 @@ const SalesFilters = () => {
             </Button>
             <Button
               disabled={busy}
+              style={{
+                background: theme.background.primary,
+                color: theme.font.color.primary,
+                padding: `${theme.spacing[2]} ${theme.spacing[3]}`,
+                minHeight: 36,
+                borderRadius: theme.border.radius.sm,
+                border: `1px solid ${theme.border.color.medium}`,
+              }}
               onClick={() => {
                 setFilters(defaults);
                 void apply(defaults);

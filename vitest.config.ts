@@ -18,8 +18,9 @@ export default defineConfig({
     }),
   ],
   test: {
-    testTimeout: 120_000,
-    hookTimeout: 120_000,
+    setupFiles: ['src/__tests__/paced-test-fetch.ts'],
+    testTimeout: 180_000,
+    hookTimeout: 180_000,
     fileParallelism: false,
     include: ['src/**/*.integration-test.ts'],
     globalSetup: ['src/__tests__/global-setup.ts'],

@@ -25,6 +25,7 @@ describe('RdClient', () => {
     );
     const page = await new RdClient(v1, save, fetcher).list('deals', 2);
     const url = new URL(String(fetcher.mock.calls[0][0]));
+    expect(fetcher.mock.calls[0][1]?.method).toBe('GET');
     expect(url.searchParams.get('page')).toBe('2');
     expect(url.searchParams.get('token')).toBe('SECRET');
     expect(page.records).toHaveLength(1);
@@ -43,6 +44,7 @@ describe('RdClient', () => {
     );
     const result = await new RdClient(v2, save, fetcher).list('deals', 1);
     expect(result.hasMore).toBe(true);
+    expect(fetcher.mock.calls[0][1]?.method).toBe('GET');
     expect(fetcher.mock.calls[0][1]?.headers).toMatchObject({
       Authorization: 'Bearer SECRET',
     });

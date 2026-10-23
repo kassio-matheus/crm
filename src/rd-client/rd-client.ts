@@ -1,4 +1,6 @@
 import type { RdCredentials } from 'src/types/rd-credentials';
+import { rdFetch } from 'src/rd-client/rd-fetch';
+import { RdOAuthClient } from 'src/rd-client/rd-oauth-client';
 
 /** One request per worker run, including retries and OAuth refreshes. Never log URLs or response bodies. */
 export class RdClient {
@@ -66,17 +68,22 @@ export class RdClient {
       url.searchParams.set('token', this.credentials.accessToken);
     let response: Response;
     try {
-      response = await this.fetcher(url, {
-        headers:
-          version === 'v2'
-            ? {
-                Authorization: `Bearer ${this.credentials.accessToken}`,
-                Accept: 'application/json',
-              }
-            : { Accept: 'application/json' },
-        redirect: 'error',
-        signal: AbortSignal.timeout(30_000),
-      });
+      response = await rdFetch(
+        url,
+        {
+          method: 'GET',
+          headers:
+            version === 'v2'
+              ? {
+                  Authorization: `Bearer ${this.credentials.accessToken}`,
+                  Accept: 'application/json',
+                }
+              : { Accept: 'application/json' },
+          redirect: 'error',
+          signal: AbortSignal.timeout(30_000),
+        },
+        this.fetcher,
+      );
     } catch {
       throw new Error('RD_CONNECTION_FAILED');
     }
@@ -147,30 +154,11 @@ export class RdClient {
     const { clientId, clientSecret, refreshToken } = this.credentials;
     if (!clientId || !clientSecret || !refreshToken)
       throw new Error('RD_OAUTH_RECONNECT_REQUIRED');
-    let response: Response;
-    try {
-      response = await this.fetcher('https://api.rd.services/oauth2/token', {
-        method: 'POST',
-        redirect: 'error',
-        signal: AbortSignal.timeout(30_000),
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          client_id: clientId,
-          client_secret: clientSecret,
-          refresh_token: refreshToken,
-        }),
-      });
-    } catch {
-      throw new Error('RD_OAUTH_RECONNECT_REQUIRED');
-    }
-    if (!response.ok) throw new Error('RD_OAUTH_RECONNECT_REQUIRED');
-    const tokens = (await response.json()) as {
-      access_token?: string;
-      refresh_token?: string;
-    };
-    if (!tokens.access_token || !tokens.refresh_token)
-      throw new Error('RD_OAUTH_RECONNECT_REQUIRED');
+    const tokens = await new RdOAuthClient(this.fetcher).refresh(
+      clientId,
+      clientSecret,
+      refreshToken,
+    );
     this.credentials = {
       ...this.credentials,
       accessToken: tokens.access_token,

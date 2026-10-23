@@ -6,9 +6,14 @@ vi.mock('twenty-client-sdk/rest', () => ({
   },
 }));
 import { executeAppFunction } from '../execute-app-function.util';
-import { IMPORT_CONTROL } from 'src/constants/rd-identifiers';
+import { IMPORT_CONTROL, OAUTH_CONTROL } from 'src/constants/rd-identifiers';
 beforeEach(() => vi.clearAllMocks());
 describe('executeAppFunction', () => {
+  it('routes OAuth setup to Twenty, not the RD API', async () => {
+    post.mockResolvedValue({ configured: false });
+    await executeAppFunction(OAUTH_CONTROL, { action: 'status' });
+    expect(post).toHaveBeenCalledWith('/s/rd-oauth', { action: 'status' });
+  });
   it('uses an authenticated app route without reading the function-management API', async () => {
     post.mockResolvedValue({ result: 1 });
     expect(

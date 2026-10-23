@@ -1,5 +1,9 @@
 import { RestApiClient } from 'twenty-client-sdk/rest';
-import { IMPORT_CONTROL, SALES_PRIORITIES } from 'src/constants/rd-identifiers';
+import {
+  IMPORT_CONTROL,
+  SALES_PRIORITIES,
+  OAUTH_CONTROL,
+} from 'src/constants/rd-identifiers';
 
 /** Authenticated app routes avoid requiring access to the workspace's function-management API. */
 export const executeAppFunction = async (
@@ -11,7 +15,9 @@ export const executeAppFunction = async (
       ? '/s/rd-import'
       : identifier === SALES_PRIORITIES
         ? '/s/sales-priorities'
-        : null;
+        : identifier === OAUTH_CONTROL
+          ? '/s/rd-oauth'
+          : null;
   if (!path) throw new Error('Ação desconhecida.');
   try {
     return await new RestApiClient().post(path, payload);

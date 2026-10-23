@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 import { MetadataApiClient } from 'twenty-client-sdk/metadata';
 import { kv } from 'twenty-sdk/logic-function';
+import { rdFetch } from 'src/rd-client/rd-fetch';
 
 /** Copies signed RD file downloads into native Twenty attachments without forwarding RD credentials. */
 export class AttachmentImporter {
@@ -59,10 +60,15 @@ export class AttachmentImporter {
         );
       let response: Response;
       try {
-        response = await this.fetcher(url, {
-          redirect: 'error',
-          signal: AbortSignal.timeout(60_000),
-        });
+        response = await rdFetch(
+          url,
+          {
+            method: 'GET',
+            redirect: 'error',
+            signal: AbortSignal.timeout(60_000),
+          },
+          this.fetcher,
+        );
       } catch {
         throw new Error('RD_CONNECTION_FAILED');
       }
@@ -100,7 +106,7 @@ export class AttachmentImporter {
           contentType: true,
         },
       });
-      const uploadResponse = await this.uploader(
+      const uploadResponse = await rdFetch(
         target.createFileUpload.uploadUrl,
         {
           method: 'PUT',
@@ -109,6 +115,7 @@ export class AttachmentImporter {
           redirect: 'error',
           signal: AbortSignal.timeout(60_000),
         },
+        this.uploader,
       );
       if (!uploadResponse.ok) throw new Error('RD_ATTACHMENT_UPLOAD_FAILED');
       const file = await this.metadata.mutation({

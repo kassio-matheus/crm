@@ -9,6 +9,8 @@ import { IMPORT_COMPONENT } from 'src/constants/rd-identifiers';
 import { executeImport } from 'src/front-components/utils/execute-import.util';
 import type { ImportState } from 'src/types/import-state';
 import type { RdCredentials } from 'src/types/rd-credentials';
+import type { RdOAuthStatus } from 'src/types/rd-oauth-status';
+import { executeRdOAuth } from 'src/front-components/utils/execute-rd-oauth.util';
 
 const ImportPage = () => {
   const theme = useTheme();
@@ -27,18 +29,25 @@ const ImportPage = () => {
   const [busy, setBusy] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [oauth, setOauth] = useState<RdOAuthStatus | null>(null);
+  const [authorizationUrl, setAuthorizationUrl] = useState('');
+  const [manualTokens, setManualTokens] = useState(false);
   const refresh = useCallback(async () => {
+    setError('');
     try {
-      const next = await executeImport('status');
+      const [next, connection] = await Promise.all([
+        executeImport('status'),
+        executeRdOAuth('status'),
+      ]);
       setState(next);
-      if (next) {
-        setSaved(true);
-        setCredentials((c) => ({
-          ...c,
-          version: next.version,
-          accountKey: next.accountKey,
-        }));
-      }
+      setOauth(connection);
+      setSaved(connection.connected);
+      setCredentials((c) => ({
+        ...c,
+        version: next?.version ?? connection.version ?? c.version,
+        accountKey: next?.accountKey ?? (c.accountKey || connection.accountKey),
+        clientId: c.clientId || connection.clientId,
+      }));
     } catch (e) {
       setError(
         e instanceof Error ? e.message : 'Falha ao consultar a importação.',
@@ -77,7 +86,7 @@ const ImportPage = () => {
     try {
       if (
         !/^[a-z0-9][a-z0-9-]{2,79}$/.test(credentials.accountKey) ||
-        !credentials.accessToken.trim()
+        (credentials.version === 'v1' && !credentials.accessToken.trim())
       )
         throw new Error(
           'Informe uma chave estável para a empresa (letras minúsculas e hífens) e o token.',
@@ -86,10 +95,11 @@ const ImportPage = () => {
         credentials.version === 'v2' &&
         (!credentials.clientId ||
           !credentials.clientSecret ||
-          !credentials.refreshToken)
+          (manualTokens &&
+            (!credentials.accessToken || !credentials.refreshToken)))
       )
         throw new Error(
-          'Preencha as credenciais OAuth para permitir a renovação do token.',
+          'Preencha Client ID e Client secret. Os tokens são obtidos ao autorizar o aplicativo.',
         );
       if (
         state &&
@@ -111,12 +121,36 @@ const ImportPage = () => {
         refreshToken: '',
         legacyToken: '',
       });
-      setSaved(true);
+      setAuthorizationUrl('');
+      const connected =
+        credentials.version === 'v1' ||
+        Boolean(credentials.accessToken && credentials.refreshToken);
+      setSaved(connected);
+      setOauth((current) =>
+        current
+          ? { ...current, configured: credentials.version === 'v2', connected }
+          : current,
+      );
       setMessage(
-        'Credenciais salvas no armazenamento criptografado do Twenty.',
+        connected
+          ? 'Credenciais salvas no armazenamento criptografado do Twenty.'
+          : 'Configuração salva. Gere a autorização e conclua a conexão no RD Station. Nenhuma importação será iniciada.',
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao salvar credenciais.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const connect = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      setAuthorizationUrl((await executeRdOAuth('start')).authorizationUrl);
+    } catch {
+      setError(
+        'Não foi possível iniciar a autorização. Salve Client ID e Client secret e tente novamente.',
+      );
     } finally {
       setBusy(false);
     }
@@ -167,6 +201,27 @@ const ImportPage = () => {
           Use credenciais do <strong>RD Station CRM</strong>, com acesso de
           administrador a todos os registros da empresa.
         </p>
+        {credentials.version === 'v2' && (
+          <div style={{ marginBottom: 16 }}>
+            <p>
+              Cadastre esta URL de callback no aplicativo do RD Station CRM:
+            </p>
+            <Input
+              aria-label="URL de callback OAuth"
+              readOnly
+              value={oauth?.callbackUrl ?? ''}
+            />
+            <p>
+              As consultas ao RD usam somente GET. A única exceção é POST no
+              endpoint de tokens OAuth para autenticação.
+            </p>
+            <p role="status">
+              {oauth?.connected
+                ? 'RD Station conectado. A importação só começa quando você solicitar.'
+                : 'Conexão ainda não autorizada.'}
+            </p>
+          </div>
+        )}
         <div
           style={{
             display: 'grid',
@@ -204,19 +259,24 @@ const ImportPage = () => {
               }
             />
           </label>
-          <label>
-            Token de acesso
-            <Input
-              aria-label="Token de acesso"
-              type="password"
-              autoComplete="off"
-              disabled={busy || running}
-              value={credentials.accessToken}
-              onChange={(e) =>
-                setCredentials({ ...credentials, accessToken: e.target.value })
-              }
-            />
-          </label>
+          {(credentials.version === 'v1' || manualTokens) && (
+            <label>
+              Token de acesso
+              <Input
+                aria-label="Token de acesso"
+                type="password"
+                autoComplete="off"
+                disabled={busy || running}
+                value={credentials.accessToken}
+                onChange={(e) =>
+                  setCredentials({
+                    ...credentials,
+                    accessToken: e.target.value,
+                  })
+                }
+              />
+            </label>
+          )}
           {credentials.version === 'v2' && (
             <>
               <label>
@@ -247,22 +307,24 @@ const ImportPage = () => {
                   }
                 />
               </label>
-              <label>
-                Refresh token
-                <Input
-                  aria-label="Refresh token"
-                  type="password"
-                  autoComplete="off"
-                  disabled={busy || running}
-                  value={credentials.refreshToken}
-                  onChange={(e) =>
-                    setCredentials({
-                      ...credentials,
-                      refreshToken: e.target.value,
-                    })
-                  }
-                />
-              </label>
+              {manualTokens && (
+                <label>
+                  Refresh token
+                  <Input
+                    aria-label="Refresh token"
+                    type="password"
+                    autoComplete="off"
+                    disabled={busy || running}
+                    value={credentials.refreshToken}
+                    onChange={(e) =>
+                      setCredentials({
+                        ...credentials,
+                        refreshToken: e.target.value,
+                      })
+                    }
+                  />
+                </label>
+              )}
               <label>
                 Token da API v1 para histórico (opcional)
                 <Input
@@ -289,6 +351,42 @@ const ImportPage = () => {
         <Button disabled={busy || running} onClick={() => void save()}>
           Salvar credenciais
         </Button>
+        {credentials.version === 'v2' && (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 12,
+              alignItems: 'center',
+              marginTop: 16,
+            }}
+          >
+            <Button
+              disabled={busy || running || !oauth?.configured}
+              onClick={() => void connect()}
+            >
+              Gerar autorização
+            </Button>
+            {authorizationUrl && (
+              <Button
+                href={authorizationUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Autorizar no RD Station
+              </Button>
+            )}
+            <Button disabled={busy || running} onClick={() => void refresh()}>
+              Verificar conexão
+            </Button>
+            <Button
+              disabled={busy || running}
+              onClick={() => setManualTokens((value) => !value)}
+            >
+              Tokens manuais (avançado)
+            </Button>
+          </div>
+        )}
       </section>
       <section
         style={{

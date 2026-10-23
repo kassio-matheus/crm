@@ -21,4 +21,6 @@ export const SOURCE_OBJECT = '775d48f3-8678-43d2-9796-465b0f007d98';
 export const IMPORT_CONTROL = '2295d8e4-ea4d-4772-a09a-37e6b040042a';
 export const IMPORT_COMPONENT = 'd5ada24d-095d-4aae-b2b8-584745427bff';
 export const IMPORT_WORKER = '96a66a66-67df-418b-ba50-a462e15e3dbf';
+export const OAUTH_CONTROL = '384f2fb2-071a-48c7-b6ad-ceaf2694f9ee';
+export const OAUTH_CALLBACK = '4cddc59b-7f93-4b6f-a3e5-7c8fc31ad09d';
 export const SALES_PRIORITIES = 'a9c1380d-abe0-472e-ab7c-892c836f0550';

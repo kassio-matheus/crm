@@ -10,9 +10,11 @@ Este repositório contém uma extensão do Twenty e uma imagem do servidor ofici
 | --------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `Twenty`        | Twenty v2.50.1, imagem oficial fixada por digest, adaptações nativas existentes | Único serviço com domínio público HTTPS, porta 3000, `/healthz`                                            |
 | `Twenty Worker` | Mesmo código e imagem base, `yarn worker:prod`                                  | Rede privada; aguarda PostgreSQL, Redis e migrações do servidor                                            |
-| `Postgres`      | PostgreSQL 16 Alpine, imagem fixada por digest                                  | Volume inicial de 10 GiB; rede privada, senha gerada; backups diários e semanais declarados                |
+| `Postgres`      | PostgreSQL 16 Alpine, imagem fixada por digest                                  | Volume inicial de 4 GiB; rede privada, senha gerada; backups diários e semanais declarados                |
 | `Redis`         | Redis 7.4 Alpine, imagem fixada por digest                                      | Volume inicial de 1 GiB; autenticação, AOF `everysec`, `noeviction`; backups diários e semanais declarados |
 | `Storage`       | Bucket S3 privado nativo do Railway, região `iad`                               | Anexos compartilhados entre servidor e worker; credenciais por referência                                  |
+
+Os volumes iniciais somam 5 GiB (4 GiB PostgreSQL e 1 GiB Redis), dentro da capacidade do Hobby, sem upgrade automático. O limite financeiro do Railway é do workspace inteiro; não o altere para um projeto isolado sem avaliar os outros serviços.
 
 Os serviços executam uma réplica na região `us-east4-eqdc4a`. Ajuste região, volumes e recursos no arquivo antes do primeiro deploy. O bucket tem região independente e imutável após sua criação. O endpoint S3 usa HTTPS autenticado; não é um volume local nem uma conexão pela rede privada dos contêineres. Os volumes não fornecem alta disponibilidade. O PostgreSQL e o Redis são contêineres sob sua responsabilidade operacional.
 

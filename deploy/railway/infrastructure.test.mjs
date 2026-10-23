@@ -12,7 +12,7 @@ const byName = (name) =>
 test('declares the whole stack including persistent private databases and a native bucket', () => {
   assert.equal(definition.resources.length, 7);
   assert.equal(byName('Storage').type, 'bucket');
-  assert.equal(byName('Postgres Data').config.sizeMB, 10240);
+  assert.equal(byName('Postgres Data').config.sizeMB, 4096);
   assert.equal(byName('Redis Data').config.sizeMB, 1024);
   for (const name of ['Postgres', 'Redis']) {
     const node = byName(name);

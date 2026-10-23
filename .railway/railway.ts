@@ -34,7 +34,7 @@ const build = {
 };
 
 export default defineRailway(() => {
-  const postgresData = volume('Postgres Data', { sizeMB: 10240, region });
+  const postgresData = volume('Postgres Data', { sizeMB: 4096, region });
   const redisData = volume('Redis Data', { sizeMB: 1024, region });
   const storage = bucket('Storage', { region: 'iad' });
   // Explicit services keep the database and queue private (no public TCP proxy).

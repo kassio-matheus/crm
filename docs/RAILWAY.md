@@ -100,6 +100,8 @@ O bucket permanece privado. `STORAGE_S3_PRESIGNED_URL_ENABLED=false` mantém os 
 
 ## Testes e limites da validação
 
+Veja o [registro da validação local de 23/10/2026](RAILWAY-VALIDATION.md), com resultados e verificações em nuvem ainda pendentes.
+
 ```sh
 yarn typecheck:deployment
 yarn test:deployment

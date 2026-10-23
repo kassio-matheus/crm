@@ -23,6 +23,7 @@ const event = (query: Record<string, string> = {}, method = 'GET') =>
     queryStringParameters: query,
     requestContext: { http: { method, path: '/rd-station/oauth/callback' } },
   }) as RoutePayload;
+const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
 beforeEach(() => vi.clearAllMocks());
 describe('RD callback', () => {
   it('is a GET route and gives a credential-free setup response', async () => {
@@ -57,6 +58,11 @@ describe('RD callback', () => {
     );
     expect(result.body).not.toMatch(/SECRET_CODE|SECRET_STATE/);
   });
+  it('logs only an allowlisted failure code', async () => {
+    complete.mockRejectedValue(new Error('RD_OAUTH_INVALID_STATE'));
+    await definition.config.handler(event({ state: 'SECRET_STATE' }), context);
+    expect(warning).toHaveBeenCalledWith('RD_OAUTH_INVALID_STATE');
+  });
   it('does not reflect malicious provider errors or secret-bearing exceptions', async () => {
     complete.mockRejectedValue(
       new Error('SECRET_CODE <script>alert(1)</script>'),
@@ -67,5 +73,7 @@ describe('RD callback', () => {
     )) as { body: string; status: number };
     expect(result.status).toBe(400);
     expect(result.body).not.toMatch(/SECRET|script|STATE/);
+    expect(warning).toHaveBeenCalledWith('RD_OAUTH_CALLBACK_FAILED');
+    expect(JSON.stringify(warning.mock.calls)).not.toMatch(/SECRET|script|STATE/);
   });
 });

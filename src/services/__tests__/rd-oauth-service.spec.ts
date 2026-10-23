@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('twenty-sdk/logic-function', () => ({ kv: {} }));
+const internal = vi.hoisted(() => ({ post: vi.fn(), options: vi.fn() }));
+vi.mock('twenty-client-sdk/rest', () => ({
+  RestApiClient: class {
+    constructor(options: unknown) { internal.options(options); }
+    post = internal.post;
+  },
+}));
 import { RdOAuthService } from '../rd-oauth-service';
 import { IMPORT_LAYOUT } from 'src/constants/rd-identifiers';
 import type { MetadataApiClient } from 'twenty-client-sdk/metadata';
@@ -8,6 +15,7 @@ import type { kv } from 'twenty-sdk/logic-function';
 
 const callbackUrl = 'https://crm.test/s/rd-station/oauth/callback';
 let raw: string;
+let latestRaw: string | undefined;
 let clock: number;
 let sequence: number;
 let entries: Map<string, unknown>;
@@ -27,6 +35,7 @@ const service = () =>
   );
 beforeEach(() => {
   vi.clearAllMocks();
+  latestRaw = undefined;
   clock = 1000;
   sequence = 0;
   entries = new Map();
@@ -56,9 +65,18 @@ beforeEach(() => {
       : {
           findOneApplication: {
             id: 'app',
-            applicationVariables: [{ key: 'RD_CREDENTIALS', value: raw }],
+            applicationVariables: [{ key: 'RD_CREDENTIALS', value: '********' }],
           },
         },
+  );
+  internal.post.mockImplementation(async () =>
+    new RdOAuthService(
+      store,
+      { query, mutation } as unknown as MetadataApiClient,
+      { exchange } as unknown as RdOAuthClient,
+      () => latestRaw ?? raw,
+      callbackUrl,
+    ).configurationFingerprint(),
   );
   mutation.mockResolvedValue({});
   exchange.mockResolvedValue({
@@ -148,12 +166,37 @@ describe('state-bound RD authorization', () => {
   it('does not overwrite configuration edited while the token request was pending', async () => {
     const state = await pending();
     exchange.mockImplementation(async () => {
-      raw = raw.replace('acme', 'other-company');
+      // The original invocation's environment is immutable; only a fresh run sees the edit.
+      latestRaw = raw.replace('acme', 'other-company');
       return { access_token: 'ACCESS', refresh_token: 'REFRESH' };
     });
     await expect(service().complete({ state, code: 'CODE' })).rejects.toThrow(
       'RD_OAUTH_CONFIG_CHANGED',
     );
+    expect(mutation).not.toHaveBeenCalled();
+  });
+  it('reads secrets only from injected server configuration when metadata values are masked', async () => {
+    const state = await pending();
+    await service().complete({ state, code: 'CODE' });
+    expect(exchange).toHaveBeenCalledWith('client', 'SECRET', 'CODE', callbackUrl);
+    expect(internal.options).toHaveBeenCalledWith({ runAs: 'application' });
+    expect(internal.post).toHaveBeenCalledWith('/s/rd-oauth', { action: 'fingerprint' });
+    expect(query.mock.calls.some(([input]) =>
+      input.findOneApplication?.applicationVariables?.value,
+    )).toBe(false);
+  });
+  it('requires permission for a fingerprint and never returns the secret', async () => {
+    const result = await service().configurationFingerprint();
+    expect(result.fingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(result)).not.toMatch(/SECRET|acme|client/);
+    query.mockRejectedValueOnce(new Error('Forbidden'));
+    await expect(service().configurationFingerprint()).rejects.toThrow('Forbidden');
+  });
+  it('fails closed if a fresh server-side fingerprint is unavailable or malformed', async () => {
+    const state = await pending();
+    internal.post.mockResolvedValue({ fingerprint: 'not-a-digest' });
+    await expect(service().complete({ state, code: 'CODE' })).rejects.toThrow('RD_OAUTH_CONFIG_CHECK_FAILED');
+    expect(exchange).not.toHaveBeenCalled();
     expect(mutation).not.toHaveBeenCalled();
   });
   it('handles denied consent without a token request', async () => {

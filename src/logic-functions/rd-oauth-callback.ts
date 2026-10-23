@@ -48,8 +48,21 @@ export default defineLogicFunction({
         page('Conexão concluída. Nenhuma importação foi iniciada.', target),
         { headers },
       );
-    } catch {
-      // Do not echo the query, OAuth code, state or provider error into HTML/logs.
+    } catch (error) {
+      // Only allowlisted static codes may enter logs; never log the query or foreign errors.
+      const known = [
+        'RD_OAUTH_INVALID_STATE',
+        'RD_OAUTH_CONFIG_CHANGED',
+        'RD_OAUTH_CONFIG_CHECK_FAILED',
+        'RD_OAUTH_AUTHORIZATION_DENIED',
+        'RD_OAUTH_INVALID_CODE',
+        'RD_OAUTH_RECONNECT_REQUIRED',
+      ];
+      const reason = error instanceof Error && known.includes(error.message)
+        ? error.message
+        : 'RD_OAUTH_CALLBACK_FAILED';
+      console.warn(reason);
+
       return new Response(
         page(
           'Não foi possível concluir a conexão. Retorne ao CRM e gere uma nova autorização.',

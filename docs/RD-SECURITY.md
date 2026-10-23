@@ -58,3 +58,11 @@ Os testes de OAuth usam respostas simuladas, incluindo expiração, replay conco
 - Status autenticado e navegador confirmaram a URL pública correta, sem credenciais salvas e sem conexão RD iniciada.
 
 Os recibos operacionais ficam em `.twenty/`, ignorado pelo Git. A troca real de tokens e a importação não fazem parte desta validação.
+
+## Correção do callback OAuth — 23/10/2026
+
+O Twenty retorna valores secretos mascarados em `applicationVariables.value`, inclusive para o próprio aplicativo. O callback usa a configuração injetada no servidor e não tenta interpretar esse valor de exibição. Uma chamada interna autenticada consulta somente o SHA-256 da configuração em uma nova execução antes e depois da troca de tokens, para detectar alterações enquanto a execução original mantém seu snapshot. Essa chamada fica no próprio Twenty; não é uma chamada adicional ao RD. O fingerprint exige permissão APPLICATIONS e não retorna credenciais.
+
+Os testes reproduzem metadados mascarados e configuração alterada em uma nova execução, preservando os testes de uso único, expiração e replay concorrente. Os logs do callback contêm somente códigos estáticos permitidos; códigos de autorização, estados, tokens e mensagens externas não entram nesses logs.
+
+A correção passou em typecheck, lint e 56 testes focados em OAuth/segurança HTTP. A sincronização em produção atualizou duas funções, sem exclusões. Pelo navegador, a nova tentativa chegou à tela de consentimento do RD usando a configuração já salva; a concessão de acesso depende da confirmação do administrador. Nenhuma importação é iniciada por esse fluxo.

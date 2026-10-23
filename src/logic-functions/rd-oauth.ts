@@ -15,13 +15,15 @@ export default defineLogicFunction({
   },
   handler: async (
     event:
-      | { action: 'status' | 'start' }
-      | { body: { action: 'status' | 'start' } },
+      | { action: 'status' | 'start' | 'fingerprint' }
+      | { body: { action: 'status' | 'start' | 'fingerprint' } },
   ) => {
     const payload = event && 'body' in event ? event.body : event;
-    if (!payload || !['status', 'start'].includes(payload.action))
+    if (!payload || !['status', 'start', 'fingerprint'].includes(payload.action))
       throw new Error('Invalid OAuth action.');
     const service = new RdOAuthService();
+    if (payload.action === 'fingerprint')
+      return service.configurationFingerprint();
     return payload.action === 'start' ? service.start() : service.status();
   },
 });

@@ -57,7 +57,7 @@ Create a PostgreSQL backup before installing into a populated workspace. `yarn t
 
 ## Railway deployment
 
-The complete stack is declared in [.railway/railway.ts](.railway/railway.ts): Twenty server, worker, PostgreSQL 16 and Redis 7.4 with persistent volumes and scheduled backups, plus a private Railway S3 bucket. [Follow the production guide](docs/RAILWAY.md) to provision the stack and register a reusable one-click Railway template. The real deploy button requires a template code issued by Railway; no template has been registered or cloud deployment performed yet.
+The complete stack is declared in [.railway/railway.ts](.railway/railway.ts): Twenty server, worker, PostgreSQL 16 and Redis 7.4 with persistent volumes, a daily encrypted PostgreSQL backup job, and a private Railway S3 bucket. [Follow the production guide](docs/RAILWAY.md) to provision the stack and register a reusable one-click Railway template. The real deploy button requires a template code issued by Railway; the production reference is deployed; the reusable template has not been registered and clone-tested yet.
 
 ## Development
 

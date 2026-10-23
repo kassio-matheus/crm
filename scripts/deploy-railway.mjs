@@ -1,6 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import {
+  resolveRailwayTarget,
+  initializeSharedSecrets,
+  initializeServerDefaults,
+} from './railway-secrets.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const cli = fileURLToPath(
@@ -37,14 +42,39 @@ export async function deploy() {
   // Native CLI prints the project, environment and plan and asks for confirmation.
   // Deliberately never pass --yes, --show-values, or --confirm-destructive here.
   run(['whoami', '--json'], true);
-  run(['config', 'apply', '--file', '.railway/railway.ts']);
+  const target = resolveRailwayTarget();
+  console.log(`Target: ${target.projectName} / ${target.environmentName}`);
+  const secrets = initializeSharedSecrets(target);
+  console.log(
+    `Secrets: ${secrets.created} initialized, ${secrets.preserved} preserved.`,
+  );
+  const environmentArgs = ['--environment', target.environmentId];
+  run(['config', 'apply', '--file', '.railway/railway.ts', ...environmentArgs]);
+  initializeServerDefaults(target);
   let domain = chooseDomain(
-    run(['domain', 'list', '--service', 'Twenty', '--json'], true),
+    run(
+      ['domain', 'list', '--service', 'Twenty', '--json', ...environmentArgs],
+      true,
+    ),
   );
   if (!domain) {
-    run(['domain', '--service', 'Twenty', '--port', '3000', '--json'], true);
+    run(
+      [
+        'domain',
+        '--service',
+        'Twenty',
+        '--port',
+        '3000',
+        '--json',
+        ...environmentArgs,
+      ],
+      true,
+    );
     domain = chooseDomain(
-      run(['domain', 'list', '--service', 'Twenty', '--json'], true),
+      run(
+        ['domain', 'list', '--service', 'Twenty', '--json', ...environmentArgs],
+        true,
+      ),
     );
   }
   if (!domain)
@@ -52,7 +82,14 @@ export async function deploy() {
   // Railway-generated domains are outside IaC reconciliation. Resolve SERVER_URL
   // before the final server/worker deployments, including a failed first boot.
   for (const service of ['Twenty', 'Twenty Worker'])
-    run(['redeploy', '--service', service, '--from-source', '--yes']);
+    run([
+      'redeploy',
+      '--service',
+      service,
+      '--from-source',
+      '--yes',
+      ...environmentArgs,
+    ]);
   console.log(
     `Waiting for https://${domain}/healthz (up to 30 minutes including builds)...`,
   );

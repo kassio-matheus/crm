@@ -5,7 +5,7 @@ on:
     paths:
       - '.railway/**'
       - 'deploy/**'
-      - 'scripts/*railway.mjs'
+      - 'scripts/*railway*.mjs'
       - '.dockerignore'
       - 'package.json'
       - 'yarn.lock'

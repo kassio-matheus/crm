@@ -4,6 +4,7 @@ import {
   github,
   image,
   project,
+  preserve,
   ref,
   service,
   volume,
@@ -11,11 +12,8 @@ import {
 
 // Repository source must be available to the Railway GitHub integration.
 export const repository = 'kassio-matheus/crm';
+const deploymentBranch = process.env.CRM_RAILWAY_BRANCH ?? 'main';
 const region = 'us-east4-eqdc4a';
-const secret = () => ({
-  generator: 'secret(64, "0123456789abcdef")',
-  preserveExisting: true,
-});
 const deployment = {
   region,
   numReplicas: 1,
@@ -33,7 +31,7 @@ const build = {
   ],
 };
 
-export default defineRailway(() => {
+export default defineRailway((context) => {
   const postgresData = volume('Postgres Data', { sizeMB: 4096, region });
   const redisData = volume('Redis Data', { sizeMB: 1024, region });
   const storage = bucket('Storage', { region: 'iad' });
@@ -48,7 +46,7 @@ export default defineRailway(() => {
     env: {
       POSTGRES_DB: 'twenty',
       POSTGRES_USER: 'twenty',
-      POSTGRES_PASSWORD: secret(),
+      POSTGRES_PASSWORD: context.shared.CRM_POSTGRES_PASSWORD,
       PGDATA: '/var/lib/postgresql/data/pgdata',
       DATABASE_URL:
         'postgresql://${{POSTGRES_USER}}:${{POSTGRES_PASSWORD}}@${{RAILWAY_PRIVATE_DOMAIN}}:5432/${{POSTGRES_DB}}',
@@ -56,18 +54,18 @@ export default defineRailway(() => {
     },
   });
   const redis = service('Redis', {
-    source: github(repository, { branch: 'main' }),
+    source: github(repository, { branch: deploymentBranch }),
     build: { ...build, dockerfilePath: 'deploy/railway/redis/Dockerfile' },
     deploy: { ...deployment, requiredMountPath: '/data' },
     volumeMounts: { '/data': redisData },
     env: {
-      REDIS_PASSWORD: secret(),
+      REDIS_PASSWORD: context.shared.CRM_REDIS_PASSWORD,
       REDIS_URL:
         'redis://default:${{REDIS_PASSWORD}}@${{RAILWAY_PRIVATE_DOMAIN}}:6379',
     },
   });
   const twenty = service('Twenty', {
-    source: github(repository, { branch: 'main' }),
+    source: github(repository, { branch: deploymentBranch }),
     build,
     start: '/app/railway-entrypoint.sh node dist/main',
     healthcheck: '/healthz',
@@ -77,11 +75,13 @@ export default defineRailway(() => {
       NODE_ENV: 'production',
       NODE_PORT: '3000',
       PORT: '3000',
+      // Railway terminates HTTPS and replaces forwarded headers at its edge.
+      TRUST_PROXY: '1',
       SERVER_URL: 'https://${{RAILWAY_PUBLIC_DOMAIN}}',
       PG_DATABASE_URL: postgres.env.DATABASE_URL,
       REDIS_URL: redis.env.REDIS_URL,
-      ENCRYPTION_KEY: secret(),
-      APP_SECRET: secret(),
+      ENCRYPTION_KEY: context.shared.CRM_ENCRYPTION_KEY,
+      APP_SECRET: context.shared.CRM_APP_SECRET,
       STORAGE_TYPE: 's3',
       STORAGE_S3_ENDPOINT: ref(storage, 'ENDPOINT'),
       STORAGE_S3_NAME: ref(storage, 'BUCKET'),
@@ -99,25 +99,22 @@ export default defineRailway(() => {
       LOGIC_FUNCTION_TYPE: 'LOCAL',
       TRUSTED_LOCAL_FUNCTIONS: 'true',
       CODE_INTERPRETER_TYPE: 'DISABLED',
-      EMAIL_DRIVER: { value: 'LOGGER', preserveExisting: true },
-      EMAIL_FROM_ADDRESS: {
-        value: 'noreply@yourdomain.com',
-        preserveExisting: true,
-      },
-      EMAIL_FROM_NAME: { value: 'CRM', preserveExisting: true },
-      EMAIL_SMTP_HOST: { value: '', preserveExisting: true },
-      EMAIL_SMTP_PORT: { value: '587', preserveExisting: true },
-      EMAIL_SMTP_USER: { value: '', preserveExisting: true },
-      EMAIL_SMTP_PASSWORD: { value: '', preserveExisting: true },
-      EMAIL_SMTP_NO_TLS: { value: 'false', preserveExisting: true },
-      AI_PROVIDERS: { value: '{}', preserveExisting: true },
+      EMAIL_DRIVER: preserve(),
+      EMAIL_FROM_ADDRESS: preserve(),
+      EMAIL_FROM_NAME: preserve(),
+      EMAIL_SMTP_HOST: preserve(),
+      EMAIL_SMTP_PORT: preserve(),
+      EMAIL_SMTP_USER: preserve(),
+      EMAIL_SMTP_PASSWORD: preserve(),
+      EMAIL_SMTP_NO_TLS: preserve(),
+      AI_PROVIDERS: preserve(),
       DISABLE_DB_MIGRATIONS: 'false',
       DISABLE_CRON_JOBS_REGISTRATION: 'false',
       TWENTY_PROCESS: 'server',
     },
   });
   const worker = service('Twenty Worker', {
-    source: github(repository, { branch: 'main' }),
+    source: github(repository, { branch: deploymentBranch }),
     build,
     start: '/app/railway-entrypoint.sh yarn worker:prod',
     deploy: deployment,
@@ -134,10 +131,29 @@ export default defineRailway(() => {
       DISABLE_CRON_JOBS_REGISTRATION: 'true',
     },
   });
-  // The SDK exposes backup schedules on graph attachments, not volume() options.
-  for (const database of [postgres, redis])
-    for (const attachment of Object.values(database.volumeAttachments ?? {}))
-      attachment.backupSchedules = ['DAILY', 'WEEKLY'];
+  const backup = service('Database Backup', {
+    source: github(repository, { branch: deploymentBranch }),
+    build: { ...build, dockerfilePath: 'deploy/railway/backup/Dockerfile' },
+    start: 'node /app/crm-backup/run.mjs',
+    deploy: {
+      ...deployment,
+      restartPolicyType: 'NEVER',
+      cronSchedule: '0 6 * * *',
+    },
+    env: {
+      PG_DATABASE_URL: postgres.env.DATABASE_URL,
+      BACKUP_ENCRYPTION_KEY: context.shared.CRM_BACKUP_ENCRYPTION_KEY,
+      ...Object.fromEntries(
+        [
+          'STORAGE_S3_ENDPOINT',
+          'STORAGE_S3_REGION',
+          'STORAGE_S3_NAME',
+          'STORAGE_S3_ACCESS_KEY_ID',
+          'STORAGE_S3_SECRET_ACCESS_KEY',
+        ].map((key) => [key, ref(twenty, key)]),
+      ),
+    },
+  });
   return project('Twenty Sales CRM', {
     resources: [
       postgresData,
@@ -147,6 +163,7 @@ export default defineRailway(() => {
       redis,
       twenty,
       worker,
+      backup,
     ],
   });
 });

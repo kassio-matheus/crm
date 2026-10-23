@@ -19,17 +19,28 @@ STORAGE_S3_REGION=${{Storage.REGION}}
 STORAGE_S3_ACCESS_KEY_ID=${{Storage.ACCESS_KEY_ID}}
 STORAGE_S3_SECRET_ACCESS_KEY=${{Storage.SECRET_ACCESS_KEY}}
 CODE_INTERPRETER_TYPE=DISABLED
-# Choose deliberately. LOCAL requires TRUSTED_LOCAL_FUNCTIONS=true and trusted app authors only.
-LOGIC_FUNCTION_TYPE=LAMBDA
-LOGIC_FUNCTION_LAMBDA_REGION=REPLACE_WITH_AWS_REGION
-LOGIC_FUNCTION_LAMBDA_ROLE=REPLACE_WITH_LAMBDA_EXECUTION_ROLE_ARN
-LOGIC_FUNCTION_LAMBDA_ACCESS_KEY_ID=REPLACE_WITH_AWS_ACCESS_KEY
-LOGIC_FUNCTION_LAMBDA_SECRET_ACCESS_KEY=REPLACE_WITH_AWS_SECRET_KEY
-# Optional for apps needing dependency layers, including this SDK app:
-LOGIC_FUNCTION_LAMBDA_LAYER_BUCKET=REPLACE_WITH_PRIVATE_AWS_LAYER_BUCKET
+# The complete IaC stack generates secrets and sets this single-company profile.
+LOGIC_FUNCTION_TYPE=LOCAL
+TRUSTED_LOCAL_FUNCTIONS=true
+STORAGE_S3_FORCE_PATH_STYLE=false
+STORAGE_S3_PRESIGNED_URL_ENABLED=false
 # Server only:
+TWENTY_PROCESS=server
 DISABLE_DB_MIGRATIONS=false
 DISABLE_CRON_JOBS_REGISTRATION=false
-# Worker: reference every shared setting above from Twenty; override only these two:
+# Worker references shared settings from Twenty, with these overrides:
+# TWENTY_PROCESS=worker
+# TWENTY_INTERNAL_URL=http://${{Twenty.RAILWAY_PRIVATE_DOMAIN}}:3000
 # DISABLE_DB_MIGRATIONS=true
 # DISABLE_CRON_JOBS_REGISTRATION=true
+# Optional SMTP configuration on Twenty (preserved by future IaC applies):
+EMAIL_DRIVER=LOGGER
+EMAIL_FROM_ADDRESS=noreply@yourdomain.com
+EMAIL_FROM_NAME=CRM
+EMAIL_SMTP_HOST=
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=
+EMAIL_SMTP_PASSWORD=
+EMAIL_SMTP_NO_TLS=false
+# Set EMAIL_DRIVER=SMTP only after entering real provider credentials.
+# AI_PROVIDERS is configured privately in Railway, never committed with API keys.

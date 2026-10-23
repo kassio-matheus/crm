@@ -4,6 +4,11 @@
 !deploy/railway/Dockerfile
 !deploy/railway/preflight.mjs
 !deploy/railway/entrypoint.sh
+!deploy/railway/wait-for-services.mjs
+!deploy/railway/storage-compat.mjs
+!deploy/railway/redis/
+!deploy/railway/redis/Dockerfile
+!deploy/railway/redis/entrypoint.sh
 
 !deploy/native-ui/
 !deploy/native-ui/apply.mjs

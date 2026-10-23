@@ -1,11 +1,6 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
+# Dependencies and generated SDK
 /node_modules
 /.pnp
-<<<<<<< HEAD
-.pnp.js
-=======
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -13,62 +8,30 @@
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
-
-# codegen
 generated
->>>>>>> origin/codex/rd-crm
 
-# testing
+# Build and test output
 /coverage
-
-<<<<<<< HEAD
-# next.js
+/dist/
+/build/
 /.next/
 /out/
-=======
-# dev
-/dist/
+*.tsbuildinfo
+*.d.ts
+next-env.d.ts
 
-.twenty
->>>>>>> origin/codex/rd-crm
-
-# production
-/build
-
-# misc
-.DS_Store
+# Credentials and local state
+.env*
 *.pem
-
-# debug
+.twenty/
+.railway/state*
+.railway/*.plan*
+.codex/
+.agents/
+.vscode/
+.vercel/
+.DS_Store
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-<<<<<<< HEAD
-
-# local env files
-.env*.local
-.env
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-=======
 .pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# typescript
-*.tsbuildinfo
-*.d.ts
-
-# Local agent integrations
-.codex/
-.agents/
-
-# Generated editor hints
-.vscode/
->>>>>>> origin/codex/rd-crm

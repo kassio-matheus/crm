@@ -143,3 +143,43 @@ describe('single-record source details', () => {
     ).toBe(false);
   });
 });
+
+
+describe('safe v2 pagination recovery', () => {
+  it('resumes the observed organizations checkpoint using only a canonical GET', async () => {
+    fetcher.mockResolvedValue(new Response(JSON.stringify({ data: [], links: {} })));
+    await new RdClient(v2, save, fetcher).list('organizations', 2,
+      'https://api.rd.services/api/v2/organizations?sort[created_at]=asc&page[number]=2&page[size]=25');
+    const [target, init] = fetcher.mock.calls[0];
+    const url = new URL(String(target));
+    expect(url.pathname).toBe('/crm/v2/organizations');
+    expect(url.searchParams.get('page[number]')).toBe('2');
+    expect(url.searchParams.get('sort[created_at]')).toBe('asc');
+    expect(init).toMatchObject({ method: 'GET', redirect: 'error' });
+  });
+  it('stores returned aliases as canonical next-page checkpoints', async () => {
+    fetcher.mockResolvedValue(new Response(JSON.stringify({
+      data: [{ id: 'org' }],
+      links: { next: 'https://api.rd.services/api/v2/organizations?page[number]=2&page[size]=25&sort[created_at]=asc' },
+    })));
+    const result = await new RdClient(v2, save, fetcher).list('organizations', 1);
+    expect(new URL(result.next!).pathname).toBe('/crm/v2/organizations');
+    expect(result.hasMore).toBe(true);
+  });
+  it('rejects aliases that repeat the current cursor after normalization', async () => {
+    fetcher.mockResolvedValue(new Response(JSON.stringify({
+      data: [{ id: 'org' }],
+      links: { next: '/api/v2/organizations?sort[created_at]=asc&page[size]=25&page[number]=1' },
+    })));
+    await expect(new RdClient(v2, save, fetcher).list('organizations', 1))
+      .rejects.toThrow('repeated pagination cursor');
+  });
+  it('rejects a response link to another resource before persisting it', async () => {
+    fetcher.mockResolvedValue(new Response(JSON.stringify({
+      data: [{ id: 'org' }], links: { next: '/api/v2/contacts?page[number]=2' },
+    })));
+    await expect(new RdClient(v2, save, fetcher).list('organizations', 1))
+      .rejects.toThrow('Unsafe');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});

@@ -64,13 +64,12 @@ test('rejects reused encryption and application secrets', () => {
   assert.match(validateProductionEnvironment(env).join('\n'), /independent/);
 });
 
-test('keeps the production preflight when Railway overrides the worker entrypoint', async () => {
-  const { readFile } = await import('node:fs/promises');
-  const worker = JSON.parse(
-    await readFile(new URL('./railway.worker.json', import.meta.url), 'utf8'),
-  );
-  assert.equal(
-    worker.deploy.startCommand,
-    '/app/railway-entrypoint.sh yarn worker:prod',
+test('rejects a worker without a private server readiness endpoint', () => {
+  assert.match(
+    validateProductionEnvironment({
+      ...valid(),
+      TWENTY_PROCESS: 'worker',
+    }).join('\n'),
+    /TWENTY_INTERNAL_URL/,
   );
 });

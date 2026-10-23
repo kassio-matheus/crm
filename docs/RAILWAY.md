@@ -1,60 +1,67 @@
-# Produção no Railway
+# Twenty Sales CRM no Railway
 
-## O que está preparado
+A infraestrutura inteira está em [`.railway/railway.ts`](../.railway/railway.ts), usando o SDK oficial `railway/iac`. O Railway cria os serviços, volumes, bucket e referências de credenciais no mesmo projeto. O script de implantação completa o domínio HTTPS e aguarda a saúde do servidor. Não é necessário criar banco ou Redis manualmente.
 
-Este repositório é um aplicativo do Twenty, não um servidor web independente. Não use `yarn start`, `twenty docker:start` ou a imagem `twenty-app-dev` em produção. O aplicativo é instalado no Twenty depois que a infraestrutura estiver disponível.
+Este repositório contém uma extensão do Twenty e uma imagem do servidor oficial com adaptações pontuais. A infraestrutura sobe o Twenty; a extensão de CRM é instalada depois da criação do primeiro administrador/workspace. Credenciais do RD Station, SMTP e IA são informadas pelo administrador, nunca embutidas na imagem.
 
-A pasta `deploy/railway` contém a imagem oficial de produção **Twenty v2.50.1**, fixada por digest, configurações separadas de servidor e worker, exemplo de variáveis e uma verificação de configuração antes da inicialização. A versão do SDK do aplicativo permanece 2.49.0. Esta combinação foi validada localmente; não publique uma imagem `latest` sem testar a atualização.
+## Recursos provisionados
 
-A imagem foi construída localmente e a verificação de configuração foi testada. Ainda são necessários a conta Railway, domínio, serviços de dados, armazenamento, segredos e a validação no ambiente real. Nenhuma infraestrutura paga foi criada e nenhum deploy de produção foi executado.
+| Recurso         | Configuração                                                                    | Persistência / acesso                                                                                      |
+| --------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `Twenty`        | Twenty v2.50.1, imagem oficial fixada por digest, adaptações nativas existentes | Único serviço com domínio público HTTPS, porta 3000, `/healthz`                                            |
+| `Twenty Worker` | Mesmo código e imagem base, `yarn worker:prod`                                  | Rede privada; aguarda PostgreSQL, Redis e migrações do servidor                                            |
+| `Postgres`      | PostgreSQL 16 Alpine, imagem fixada por digest                                  | Volume inicial de 10 GiB; rede privada, senha gerada; backups diários e semanais declarados                |
+| `Redis`         | Redis 7.4 Alpine, imagem fixada por digest                                      | Volume inicial de 1 GiB; autenticação, AOF `everysec`, `noeviction`; backups diários e semanais declarados |
+| `Storage`       | Bucket S3 privado nativo do Railway, região `iad`                               | Anexos compartilhados entre servidor e worker; credenciais por referência                                  |
 
-## 1. Criar a infraestrutura
+Os serviços executam uma réplica na região `us-east4-eqdc4a`. Ajuste região, volumes e recursos no arquivo antes do primeiro deploy. O bucket tem região independente e imutável após sua criação. O endpoint S3 usa HTTPS autenticado; não é um volume local nem uma conexão pela rede privada dos contêineres. Os volumes não fornecem alta disponibilidade. O PostgreSQL e o Redis são contêineres sob sua responsabilidade operacional.
 
-No mesmo projeto e ambiente Railway, crie:
+## Primeira implantação da infraestrutura
 
-| Serviço         | Origem/configuração                                    | Persistência e acesso                                                   |
-| --------------- | ------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `Postgres`      | PostgreSQL 16, conforme a composição oficial do Twenty | Volume persistente, backups programados, conexão pela rede privada      |
-| `Redis`         | Redis, com `--maxmemory-policy noeviction`             | Volume e persistência AOF (`--appendonly yes`); sem domínio público     |
-| `Storage`       | Bucket privado S3 compatível do Railway                | Arquivos compartilhados pelo servidor e worker                          |
-| `Twenty`        | Este GitHub repo, branch de release revisada           | Configuração `/deploy/railway/railway.server.json`                      |
-| `Twenty Worker` | O mesmo repo e commit do servidor                      | Configuração `/deploy/railway/railway.worker.json`; sem domínio público |
+Requisitos: conta Railway com capacidade de cobrança para os recursos, GitHub conectado ao Railway com acesso ao repositório, Node 24 e Yarn 4. **Publique os arquivos desta alteração na branch `main` antes de provisionar**, pois o Railway constrói a partir do GitHub. Se usar fork/branch diferente, altere `repository` e as origens em `.railway/railway.ts` antes do plano.
 
-Nos dois serviços do repo, deixe **Root Directory** na raiz e selecione o caminho de configuração correspondente em Settings → Config as Code. O Dockerfile usa a imagem oficial fixada e aplica uma pequena adaptação no seletor nativo para ocultar Editar/Excluir dos quadros de funil gerenciados. O build confere a versão exata do frontend e falha se ela for incompatível. Ele não compila o monorepo do Twenty. Veja [a adaptação e sua manutenção](../deploy/native-ui/README.md). Gere um domínio HTTPS apenas para `Twenty`, com porta alvo **3000**. O servidor usa `/healthz` para liberar o deploy; o worker usa `/app/railway-entrypoint.sh yarn worker:prod` (preservando a checagem mesmo com o override de start do Railway) e sua fila deve ser acompanhada pelos logs.
+```sh
+yarn install --immutable
+yarn railway login
+yarn railway init --name twenty-sales-crm
+yarn railway:plan
+yarn railway:deploy
+```
 
-Ative primeiro banco e Redis; suba o servidor e aguarde `/healthz` responder, depois inicie o worker. Use uma réplica de cada processo inicialmente; as migrações e o registro de cron ficam apenas no servidor. Dimensione memória por métricas e valide uma importação representativa antes da abertura ao cliente.
+`init` cria e vincula um projeto novo; use um projeto dedicado vazio. `railway:plan` consulta o Railway e mostra mudanças sem aplicar. `railway:deploy` usa a confirmação nativa do Railway, aplica todos os recursos, gera o domínio público de `Twenty` na porta 3000 e inicia os deploys finais de servidor e worker. Ele aguarda até 30 minutos pelo `/healthz`, incluindo tempo de build. A primeira tentativa automática de boot pode falhar enquanto o domínio ainda não existe; o script resolve o domínio e reimplanta os processos com `SERVER_URL` válido. O worker aguarda a saúde do servidor antes de iniciar o consumidor de filas.
 
-A separação entre serviços, volumes e rede segue o [guia do Railway](https://docs.railway.com/guides/docker-compose) e a [composição oficial da versão v2.50.1](https://github.com/twentyhq/twenty/blob/twenty/v2.50.1/packages/twenty-docker/docker-compose.yml).
+O script não aceita flags para ignorar confirmação e não autoriza exclusões destrutivas automaticamente. Se houver falha, os recursos são preservados; corrija o motivo nos logs e execute novamente. Leia o projeto/ambiente exibido pelo plano antes de confirmar. Não use este arquivo completo sobre um projeto com recursos de outros sistemas.
 
-## 2. Variáveis e arquivos
+As senhas do PostgreSQL/Redis e as duas chaves independentes do Twenty são geradas pelo Railway, com `preserveExisting` para preservar valores existentes. O worker usa referências do servidor para compartilhar configuração. Não copie as chaves para arquivos versionados e **nunca regenere `ENCRYPTION_KEY` sobre um banco existente**. Exporte as chaves para um cofre privado para recuperação de desastre.
 
-Use `deploy/railway/variables.example` como roteiro no editor de variáveis. Os nomes dos serviços precisam coincidir com as referências `${{...}}`. Confira os nomes reais das variáveis disponibilizadas pelo bucket; adapte as referências se a interface usar outros nomes.
+Se preferir domínio próprio, configure-o no serviço `Twenty`, substitua `SERVER_URL` em `.railway/railway.ts` pela origem HTTPS final e reimplante servidor e worker. `RAILWAY_PUBLIC_DOMAIN` continua apontando ao domínio gerado do Railway; adicionar um domínio próprio sozinho não muda essa variável.
 
-- `PG_DATABASE_URL` e `REDIS_URL`: URLs privadas dos respectivos serviços. Não copie credenciais para o Git.
-- `SERVER_URL`: origem HTTPS final do CRM, sem caminhos. Ao usar domínio próprio, atualize servidor e worker.
-- `NODE_PORT=3000` e `PORT=3000`: devem coincidir com a porta alvo do domínio.
-- Gere **dois** segredos independentes com `openssl rand -base64 32`: `ENCRYPTION_KEY` e `APP_SECRET`. Guarde-os em um cofre. Eles precisam ser idênticos entre servidor e worker e sobreviver às atualizações. Em uma migração de instalação existente, preserve as chaves anteriores; não gere chaves novas sobre um banco com segredos criptografados.
-- `STORAGE_TYPE=s3`: configure os valores `STORAGE_S3_*` do exemplo. Server e worker devem apontar para o mesmo bucket e usar os mesmos valores. Não use o sistema de arquivos temporário de um serviço Railway para anexos.
-- Mantenha `NODE_ENV=production`, `SIGN_IN_PREFILLED=false`, `IS_MULTIWORKSPACE_ENABLED=false`, `CODE_INTERPRETER_TYPE=DISABLED` e `IS_CONFIG_VARIABLES_IN_DB_ENABLED=false`. Este último torna as variáveis do Railway a configuração efetiva; integrações e SMTP também são configurados por variáveis nesse perfil.
-- No worker, use referências `${{Twenty.NOME_DA_VARIAVEL}}` para os valores compartilhados. Sobrescreva somente `DISABLE_DB_MIGRATIONS=true` e `DISABLE_CRON_JOBS_REGISTRATION=true`; no servidor, ambos são `false`.
+## Transformar em deploy por um clique
 
-No bucket, permita CORS somente para a origem HTTPS do CRM, com GET/PUT/HEAD e os cabeçalhos necessários ao upload. O bucket permanece privado. Valide upload, download e um anexo importado após reiniciar ambos os processos. Configure SMTP para convites e recuperação de senha antes de cadastrar a equipe. Os detalhes de chaves, S3 e funções estão na [documentação oficial do Twenty](https://docs.twenty.com/developers/self-host/capabilities/setup).
+Depois de subir e validar uma instalação de referência, execute:
 
-## 3. Habilitar as funções do aplicativo
+```sh
+yarn railway:template
+```
 
-O importador, a preparação dos quadros e as atualizações automáticas dependem de funções de lógica. Elas vêm desabilitadas por padrão em produção.
+O comando oficial `railway templates create --json` gera um **rascunho não publicado** a partir do projeto vinculado e informa o identificador/editor do template. No editor do Railway:
 
-O exemplo adota `LOGIC_FUNCTION_TYPE=LAMBDA`, com isolamento. Configure região, papel IAM de execução, credenciais do controlador Lambda e bucket privado AWS para camadas de dependências. O papel precisa poder executar a função, e as credenciais do controlador precisam das operações de provisionamento Lambda, publicação de camadas, passagem desse papel e acesso ao bucket de camadas, limitados aos recursos dedicados ao Twenty. Siga a configuração oficial do driver; valide o provisionamento e a execução de uma função instalada antes da importação. O bucket AWS de camadas é diferente do bucket de arquivos do CRM.
+1. Confirme os quatro serviços, os dois volumes e o bucket `Storage`, com suas referências. Confira os backups e os caminhos de Dockerfile de `Twenty`, `Twenty Worker` e `Redis`. Se o editor não transportar algum recurso/configuração, corrija o rascunho antes de compartilhá-lo.
+2. Habilite um domínio HTTP com porta 3000 somente para `Twenty`. Banco, Redis e worker permanecem sem domínio público e sem TCP Proxy.
+3. Substitua qualquer segredo copiado da instalação de referência por gerador de template: `${{secret(64, "0123456789abcdef")}}` para `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `ENCRYPTION_KEY` e `APP_SECRET`, cada um em seu serviço de origem. Preserve referências no worker. Cada instalação deve receber chaves novas e independentes.
+4. O bucket precisa ser criado para cada instalação; use suas referências `BUCKET`, `REGION`, `ENDPOINT`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`. Não publique credenciais de um bucket já existente.
+5. Remova SMTP, IA, tokens do RD, IDs de clientes e qualquer valor privado da instalação de referência. O template provisiona volumes vazios; dados do CRM não devem fazer parte de uma imagem.
+6. Finalize o template e faça um deploy de aceitação em um projeto separado. Só compartilhe o botão depois de conferir domínio, conexões, chaves distintas, backups e anexos nessa nova instalação.
 
-Para uma instalação de uma única empresa, onde **somente administradores de confiança publicam código revisado**, é possível executar tudo no Railway com `LOGIC_FUNCTION_TYPE=LOCAL` e `TRUSTED_LOCAL_FUNCTIONS=true`. Nesse perfil, remova as variáveis `LOGIC_FUNCTION_LAMBDA_*`. O driver LOCAL executa código no mesmo ambiente dos serviços e não fornece isolamento de sandbox. Não conceda publicação de aplicativos ou edição de funções a pessoas sem essa confiança. A checagem exige essa escolha explícita; não ativa o driver LOCAL automaticamente.
+O link/botão real é emitido pelo Railway após o registro; não basta adicionar um arquivo `railway.json` ou um link arbitrário ao GitHub. Use o código real retornado pela plataforma no formato do botão documentado pelo Railway. Publicação no marketplace é opcional e separada da geração do rascunho.
 
-O perfil Lambda requer serviços AWS e ainda não foi executado com as credenciais de produção. O perfil LOCAL e as funções deste aplicativo foram exercitados na instância local isolada. A publicação só deve ser liberada depois do teste do perfil escolhido no Railway.
+**Estado deste repositório:** o fluxo e a infraestrutura estão preparados, mas não há código de template registrado nem URL de botão ativa. O CLI atualizado reconhece a conta local, mas nenhum projeto foi vinculado e nenhum recurso pago foi criado. O registro e o teste do clone dependem da publicação destes arquivos no GitHub e da implantação de referência em um projeto Railway escolhido.
 
-## 4. Instalar o aplicativo e configurar o workspace
+## Preparar o CRM depois do primeiro boot
 
-Crie o administrador no Twenty publicado. No computador de manutenção, use Node 24.5+ da linha 24, Yarn 4 e o CLI oficial `twenty@2.49.0`. Instale as dependências com `yarn install --immutable`. Cadastre e selecione explicitamente o remote de produção; autentique pelo CLI e não envie chaves em mensagens.
+Abra a URL informada pelo script, crie o primeiro administrador e workspace no fluxo nativo do Twenty. No computador de manutenção, com o CLI oficial `twenty@2.49.0` autenticado no workspace:
 
-```bash
+```sh
 npm install --global twenty@2.49.0
 yarn twenty remote:add --url https://crm.seu-dominio.com --as production
 yarn twenty remote:use production
@@ -69,33 +76,59 @@ yarn twenty app:install --remote production
 TWENTY_REMOTE=production yarn configure:native-sales --locale pt-BR
 ```
 
-O bootstrap aplica o modelo de forma aditiva e gera o cliente tipado antes do build completo. Em atualizações, aumente a versão do aplicativo antes de publicar. Faça backup antes de alterar a instalação. Não execute a suíte de integração em produção: ela é restrita a `localhost:2021`.
+O bootstrap é aditivo e gera o SDK antes do build completo. A instalação configura funis/etapas, filtros, ações diretas, menu com seis itens e abertura lateral nativa. O padrão PT-BR usa BRL para novos valores; valores existentes não são convertidos. Não execute testes de integração contra produção e não use `twenty docker:start` para hospedar o servidor publicado. Atualizações do aplicativo publicadas/instaladas exigem aumento de versão.
 
-A configuração final ajusta metadados nativos: menu de trabalho com seis itens, abertura lateral, resumo da negociação, agrupamento de quadros por etapa e BRL como moeda padrão dos campos monetários do workspace PT-BR. Ela **não converte valores existentes**. O Twenty não oferece, via esta extensão, um padrão de moeda diferente por usuário no mesmo workspace: em uma equipe multilíngue, o padrão BRL continua sendo do workspace; valores em outras moedas mantêm sua moeda. Para outro idioma, use `--locale` correspondente para preservar os padrões monetários existentes.
+O workflow manual `.github/workflows/cd.yml` instala a extensão usando o environment protegido `production` e os valores `TWENTY_DEPLOY_URL` e `TWENTY_DEPLOY_API_KEY`. Ele complementa a infraestrutura; não a provisiona. Proteja esse environment com revisores e use uma chave restrita ao workspace pretendido.
 
-Negociações sem etapa ficam acessíveis na Lista e só aparecem como cards depois que uma etapa for atribuída.
+### E-mail, IA e funções
 
-As configurações anteriores ficam em `.twenty/backups/native-sales/<object-id>/`. O script remove atalhos excedentes, preservando seus objetos, registros, páginas e visualizações. Favoritos pessoais e os controles do sistema do Twenty continuam disponíveis. Configuração de funis e etapas fica no painel **Funil / Filtros**.
+A infraestrutura inicia com `EMAIL_DRIVER=LOGGER`: os e-mails são registrados, não entregues. Configure um provedor SMTP em **Twenty → Variables** no Railway antes de liberar convites e recuperação de senha:
 
-## 5. Publicação pelo GitHub
+- `EMAIL_DRIVER=SMTP`, `EMAIL_FROM_ADDRESS` e `EMAIL_FROM_NAME`;
+- `EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT`, `EMAIL_SMTP_USER`, `EMAIL_SMTP_PASSWORD`;
+- mantenha `EMAIL_SMTP_NO_TLS=false` e valide a entrega real.
 
-O workflow `cd.yml` é manual e usa o environment protegido `production`. Cadastre nele a variável `TWENTY_DEPLOY_URL`, o secret `TWENTY_DEPLOY_API_KEY` e revisores obrigatórios. A chave precisa administrar aplicativos, visualizações e os ajustes de metadados realizados na configuração. Limite seu acesso ao workspace pretendido.
+Essas variáveis e `AI_PROVIDERS` estão declaradas com preservação dos valores existentes. Configure IA privadamente conforme o formato suportado pelo Twenty. O worker referencia os mesmos valores; reimplante os dois após alterações. Para novos parâmetros não declarados, adicione-os ao IaC, usando referências ou `preserve()` para segredos já cadastrados; o plano completo pode propor remover variáveis que não conhece. Revise o plano e nunca versione valores privados.
 
-O workflow faz bootstrap aditivo, gera o SDK, verifica o aplicativo, publica privadamente, instala e aplica os padrões PT-BR. Ele não cria os serviços Railway e não roda testes destrutivos de integração contra produção. Configure a branch usada pelo servidor e worker para que ambos recebam o mesmo commit revisado.
+O perfil incluído usa `LOGIC_FUNCTION_TYPE=LOCAL` e `TRUSTED_LOCAL_FUNCTIONS=true` para executar o importador inteiramente no Railway, sem AWS. Destina-se a uma única empresa onde apenas administradores de confiança instalam aplicativos/código revisado: o driver LOCAL não fornece sandbox isolada. O interpretador de código permanece desabilitado. Se for necessário isolamento para autores de código não confiáveis, configure o driver `LAMBDA`, seus recursos e permissões AWS antes de habilitar esse público; essa alternativa não é provisionada por este template.
 
-## 6. Validação antes de liberar o cliente
+### Arquivos
 
-1. Confirmar `/healthz`, login, recuperação de senha e convites por SMTP.
-2. Selecionar dois funis distintos e verificar que cada quadro exibe somente suas etapas, incluindo as vazias; arrastar uma negociação sintética entre etapas e conferir o funil.
-3. Na negociação sintética, usar Pausar → Retomar → Marcar perda → Marcar venda. Conferir que etapa, responsável, valor e histórico importado permanecem corretos.
-4. Criar um valor novo e conferir BRL; conferir que registros antigos em USD continuam em USD.
-5. Criar uma tarefa vinculada e confirmar a atualização automática da próxima atividade após concluir a tarefa. Reiniciar o worker e verificar recuperação da fila.
-6. Validar upload/download e persistência dos anexos após novo deploy.
-7. Na página Importar do RD Station, salvar credenciais, simular e revisar o relatório antes de iniciar. Verificar limite de requisições, pausa/retomada e repetição sem duplicatas com um conjunto representativo.
-8. Restaurar um backup em ambiente separado e validar login, registros, anexos e descriptografia de credenciais. Remover apenas os registros sintéticos de validação.
+A imagem adapta exclusivamente a opção S3 `forcePathStyle`, que era fixa em `true` no Twenty v2.50.1. `STORAGE_S3_FORCE_PATH_STYLE=false` permite os novos buckets Railway com URLs virtuais por host. O build confere o hash exato do arquivo original e recusa versões desconhecidas. O seletor nativo de funis mantém a [adaptação já existente](../deploy/native-ui/README.md).
 
-## Backups, atualizações e recuperação
+O bucket permanece privado. `STORAGE_S3_PRESIGNED_URL_ENABLED=false` mantém os arquivos passando pela API autenticada do Twenty; esse perfil dispensa acesso direto do navegador ao bucket. Se habilitar URLs pré-assinadas no futuro, revise CORS e teste upload/download com a origem HTTPS final.
 
-Programe backups do volume PostgreSQL no Railway e uma cópia externa criptografada. Defina retenção conforme o negócio e teste a restauração. Preserve separadamente o bucket de arquivos, `ENCRYPTION_KEY`, eventual `FALLBACK_ENCRYPTION_KEY`, `APP_SECRET`, configuração de infraestrutura e o commit/versão do aplicativo. Um backup SQL não contém os arquivos do bucket. A política do serviço está no [guia de backups do Railway](https://docs.railway.com/volumes/backups).
+## Testes e limites da validação
 
-Antes de atualizar, pause a importação, obtenha backup consistente, teste a nova versão em staging, publique servidor e worker com a mesma imagem e execute a validação acima. Um rollback de container não desfaz migrações do banco. Quando houver mudança de esquema incompatível, restaure banco, arquivos e chaves correspondentes em um ambiente isolado e valide antes de trocar o tráfego. Não restaure o dump de desenvolvimento sobre produção nem leve os dados de demonstração Apple para o cliente.
+Veja o [registro da validação local de 23/10/2026](RAILWAY-VALIDATION.md), com resultados e verificações em nuvem ainda pendentes.
+
+```sh
+yarn typecheck:deployment
+yarn test:deployment
+yarn test:deployment:docker
+```
+
+A última verificação requer Docker/BuildKit e cria uma rede, contêineres e volumes com prefixo aleatório `crm-railway-smoke-*`. Constrói as imagens de produção, inicia o worker antes dos dados, executa migrações em banco vazio, verifica `/healthz`, início do worker, autenticação Redis e persistência PostgreSQL/Redis após reiniciar. No final remove somente seus próprios recursos. Não acessa os dados do Twenty local em `localhost:2020`.
+
+O ensaio local usa um endpoint S3 fictício e não valida transferências no bucket nativo, roteamento Railway, SMTP, registro/clone de template ou restauração de backup em nuvem. O workflow `railway-infrastructure.yml` faz validação estática em pull requests; o ensaio Docker é executado quando iniciado manualmente. Esses limites devem ser concluídos no ambiente de aceitação antes de liberar o cliente.
+
+No Railway, valide: login, `/healthz`, logs e execução real de uma função pelo worker; selecionar dois funis incluindo etapas vazias; negociação sintética com Pausar/Retomar/Perda/Venda; upload e download de um anexo e persistência após novo deploy; simulação do importador; entrega SMTP; restauração em ambiente separado. Verifique que PostgreSQL/Redis/worker não têm exposição pública, que os backups foram efetivamente agendados e que as chaves de um clone diferem da instalação de referência.
+
+## Backups, atualizações e instalações existentes
+
+O IaC declara snapshots diários e semanais dos volumes PostgreSQL e Redis. Confirme a disponibilidade do recurso no plano Railway escolhido e a criação dos backups na plataforma. Complemente com backup lógico PostgreSQL consistente, cópia externa criptografada, retenção definida e restauração testada. Snapshots de volume não substituem um ensaio de recuperação. AOF `everysec` permite perder aproximadamente um segundo de gravações Redis em falha abrupta; o importador também usa checkpoints no PostgreSQL.
+
+O bucket de anexos **não está incluído nos backups dos volumes**. Preserve-o separadamente junto com `ENCRYPTION_KEY`, eventual `FALLBACK_ENCRYPTION_KEY`, `APP_SECRET`, configuração e versão da extensão. O template não cria uma política de backup externo do bucket. Defina-a antes da entrada em produção; um dump SQL sozinho não recupera anexos.
+
+Antes de atualizar: pause importações, obtenha backups, teste em staging, revise o plano e publique servidor/worker com o mesmo commit. As imagens base estão fixadas por digest; uma atualização de Twenty exige revisar as duas adaptações e repetir o ensaio. Um rollback de imagem não reverte migrações de banco. Não use uninstall para rollback da extensão.
+
+Instalações Railway antigas que usam `railway.server.json`/`railway.worker.json` precisam de migração explícita: faça backup e use `railway config migrate` conforme a documentação antes de adotar o IaC. Esses arquivos de configuração por serviço foram substituídos neste repositório pela declaração única. Não execute `init`/o template para substituir uma instalação com dados e não troque seus volumes ou chaves sem procedimento de migração revisado.
+
+## Referências oficiais consultadas
+
+- [Railway Infrastructure as Code](https://docs.railway.com/infrastructure-as-code) e [referência do SDK](https://docs.railway.com/infrastructure-as-code/reference).
+- [CLI config: plan/apply/migrate](https://docs.railway.com/cli/config).
+- [Conversão de Docker Compose](https://docs.railway.com/guides/docker-compose): serviços separados e ausência de `depends_on`.
+- [Criar templates e gerar segredos](https://docs.railway.com/templates/create), [CLI templates](https://docs.railway.com/cli/templates) e [publicar/compartilhar](https://docs.railway.com/templates/publish-and-share).
+- [Buckets S3](https://docs.railway.com/storage-buckets), [upload/serving](https://docs.railway.com/storage-buckets/uploading-serving) e [backups de volumes](https://docs.railway.com/volumes/backups).
+- [Composição oficial do Twenty v2.50.1](https://github.com/twentyhq/twenty/blob/twenty/v2.50.1/packages/twenty-docker/docker-compose.yml) e [configuração self-hosted](https://docs.twenty.com/developers/self-host/capabilities/setup).

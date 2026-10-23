@@ -62,6 +62,19 @@ export const validateProductionEnvironment = (env) => {
   }
   if (env.CODE_INTERPRETER_TYPE !== 'DISABLED')
     errors.push('Keep the unused code interpreter disabled.');
+  if (env.TWENTY_PROCESS === 'worker') {
+    try {
+      const url = new URL(env.TWENTY_INTERNAL_URL);
+      if (
+        !['http:', 'https:'].includes(url.protocol) ||
+        url.username ||
+        url.password
+      )
+        errors.push('TWENTY_INTERNAL_URL must be the private server origin.');
+    } catch {
+      errors.push('TWENTY_INTERNAL_URL is required for worker readiness.');
+    }
+  }
   if (env.LOGIC_FUNCTION_TYPE === 'LAMBDA')
     for (const key of [
       'LOGIC_FUNCTION_LAMBDA_REGION',

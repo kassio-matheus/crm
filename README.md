@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# crm
-Open-Source project Customer Relationship Management (CRM) created with Next.js and Nest.js
-=======
 # Twenty Sales CRM
 
 An additive Twenty app using the native Twenty sales workspace and a resumable RD Station CRM migration. Source code and internal identifiers are English; the workspace UI is Portuguese.
@@ -59,6 +55,10 @@ Native database events maintain the next pending task date for sorting and keep 
 
 Create a PostgreSQL backup before installing into a populated workspace. `yarn twenty plan` is read-only. Apply with `yarn twenty apply --no-delete` to preserve remote entities absent from a partial source checkout. Never uninstall this app to roll back: uninstall removes its owned metadata and source snapshots. Redeploy a prior Git checkpoint with `--no-delete`, and restore a database backup only through an explicitly planned restore procedure.
 
+## Railway deployment
+
+The complete stack is declared in [.railway/railway.ts](.railway/railway.ts): Twenty server, worker, PostgreSQL 16 and Redis 7.4 with persistent volumes and scheduled backups, plus a private Railway S3 bucket. [Follow the production guide](docs/RAILWAY.md) to provision the stack and register a reusable one-click Railway template. The real deploy button requires a template code issued by Railway; no template has been registered or cloud deployment performed yet.
+
 ## Development
 
 See [SETUP.md](SETUP.md), [validation](docs/VALIDATION.md) and the [Railway production guide](docs/RAILWAY.md).
@@ -79,4 +79,3 @@ yarn test               # isolated localhost:2021 only; never uninstalls the app
 The official Twenty agent skills are installed locally under `.agents/skills/`. The RD documentation MCP is configured in the ignored `.codex/config.toml`; reload the agent session to discover it. Neither configuration contains an RD account token.
 
 Primary references: [Twenty app documentation](https://docs.twenty.com/developers/extend/apps/getting-started/quick-start), [RD CRM v1 limits](https://developers.rdstation.com/reference/crm-v1-introducao-e-requisitos), [RD CRM v2 pagination and limits](https://developers.rdstation.com/reference/crm-v2-introduction), [OAuth token renewal](https://developers.rdstation.com/reference/crm-v2-authentication-step-4).
->>>>>>> origin/codex/rd-crm

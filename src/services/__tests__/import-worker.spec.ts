@@ -180,3 +180,35 @@ describe('checkpoint consistency', () => {
     expect(importer.import).not.toHaveBeenCalled();
   });
 });
+
+describe('bounded dashboard telemetry', () => {
+  it('records successful page facts without credentials or source contents', async () => {
+    const { worker, state } = setup();
+    mocks.list.mockResolvedValue({
+      records: [{ id: '1', name: 'PRIVATE' }],
+      hasMore: false,
+    });
+    await worker.run({});
+    expect(state.lastBatchSize).toBe(1);
+    expect(state.lastRequestDurationMs).toBeGreaterThanOrEqual(0);
+    expect(state.activity?.[state.activity.length - 1]).toMatchObject({
+      event: 'page',
+      kind: 'users',
+      page: 1,
+      batchSize: 1,
+    });
+    expect(JSON.stringify(state.activity)).not.toMatch(/PRIVATE|SECRET/);
+  });
+  it('records retry delays without changing cursors or starting live mode', async () => {
+    const { worker, state } = setup({ ...initial(), dryRun: true });
+    mocks.list.mockRejectedValue(new Error('RD_RETRY:125000'));
+    await worker.run({});
+    expect(state.activity?.[state.activity.length - 1]).toMatchObject({
+      event: 'retry',
+      retryAfterMs: 125000,
+      dryRun: true,
+    });
+    expect(state.page).toBe(1);
+    expect(state.created).toBe(0);
+  });
+});

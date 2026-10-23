@@ -1,3 +1,4 @@
+import type { ImportActivity } from 'src/types/import-activity';
 export type ImportState = {
   id: string;
   accountKey: string;
@@ -25,4 +26,10 @@ export type ImportState = {
   error: string | null;
   startedAt: string;
   updatedAt: string;
+  activity?: ImportActivity[];
+  lastRequestAt?: string;
+  lastRequestDurationMs?: number;
+  lastBatchSize?: number;
+  pauseRequested?: boolean;
+  queue?: { state: string; attemptsMade: number };
 };

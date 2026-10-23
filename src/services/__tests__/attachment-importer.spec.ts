@@ -65,6 +65,7 @@ describe('AttachmentImporter', () => {
       ),
     ).toBe(true);
     expect(fetcher.mock.calls[0][1]).not.toHaveProperty('headers');
+    expect(fetcher.mock.calls[0][1]?.method).toBe('GET');
     expect(
       Buffer.from(uploader.mock.calls[0][1]?.body as Uint8Array).toString(),
     ).toBe('data');
@@ -101,4 +102,30 @@ describe('AttachmentImporter', () => {
     ).rejects.toThrow('incomplete');
     expect(uploadFile).not.toHaveBeenCalled();
   });
+  it.each([
+    'https://api.rd.services/crm/v2/deals',
+    'https://crm.rdstation.com/api/v1/deals',
+    'https://api.rd.services/oauth2/token',
+  ])(
+    'cannot PUT an attachment to RD even if upload metadata points there: %s',
+    async (url) => {
+      fetcher.mockResolvedValue(new Response('data'));
+      metadataMutation.mockResolvedValue({
+        createFileUpload: {
+          fileId: 'file',
+          uploadUrl: url,
+          contentType: 'text/plain',
+        },
+      });
+      await expect(
+        build().import(
+          { url: 'https://bucket.s3.amazonaws.com/file', size: 4 },
+          'id',
+          'deal',
+        ),
+      ).rejects.toThrow('RD_READ_ONLY_POLICY');
+      expect(uploader).not.toHaveBeenCalled();
+      expect(mutation).not.toHaveBeenCalled();
+    },
+  );
 });

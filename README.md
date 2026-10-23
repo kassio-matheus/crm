@@ -55,6 +55,10 @@ Native database events maintain the next pending task date for sorting and keep 
 
 Create a PostgreSQL backup before installing into a populated workspace. `yarn twenty plan` is read-only. Apply with `yarn twenty apply --no-delete` to preserve remote entities absent from a partial source checkout. Never uninstall this app to roll back: uninstall removes its owned metadata and source snapshots. Redeploy a prior Git checkpoint with `--no-delete`, and restore a database backup only through an explicitly planned restore procedure.
 
+## RD API safety and OAuth
+
+RD business data requests are GET-only. The sole approved POST exception is the fixed OAuth token endpoint. The import page displays the callback URL and supports authorization-code exchange; connecting never starts an import. See [the security audit and OAuth setup](docs/RD-SECURITY.md).
+
 ## Railway deployment
 
 The complete stack is declared in [.railway/railway.ts](.railway/railway.ts): Twenty server, worker, PostgreSQL 16 and Redis 7.4 with persistent volumes, a daily encrypted PostgreSQL backup job, and a private Railway S3 bucket. [Follow the production guide](docs/RAILWAY.md) to provision the stack and register a reusable one-click Railway template. The real deploy button requires a template code issued by Railway; the production reference is deployed; the reusable template has not been registered and clone-tested yet.

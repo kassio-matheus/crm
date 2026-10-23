@@ -13,8 +13,8 @@ export function ensureWorkspaceApplication(identity, request) {
       'mutation($input:CreateApplicationRegistrationInput!){createApplicationRegistration(input:$input){applicationRegistration{id}}}',
       { input: { name: identity.name, ...variables } },
     );
-  // The bounded SDK 2.49 apply registers an app but can upload before creating
-  // its workspace installation. This API is idempotent and never deletes data.
+  // Ensure the workspace installation exists before uploading assets.
+  // This API is idempotent and never deletes data.
   return request(
     'mutation($universalIdentifier:String!,$name:String!){createDevelopmentApplication(universalIdentifier:$universalIdentifier,name:$name){id universalIdentifier}}',
     { ...variables, name: identity.name },

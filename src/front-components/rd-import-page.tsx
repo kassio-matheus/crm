@@ -47,11 +47,14 @@ const ImportPage = () => {
   }, []);
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+  useEffect(() => {
+    if (state?.status !== 'RUNNING' && state?.status !== 'READY') return;
     const timer = setInterval(() => {
       void refresh();
     }, 5000);
     return () => clearInterval(timer);
-  }, [refresh]);
+  }, [refresh, state?.status]);
   const action = async (name: 'simulate' | 'start' | 'pause' | 'resume') => {
     setBusy(true);
     setError('');

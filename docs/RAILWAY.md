@@ -77,14 +77,15 @@ yarn lint
 yarn test:unit
 yarn test:deployment
 yarn twenty dev:build
-yarn twenty app:publish --private --remote production
-yarn twenty app:install --remote production
+twenty app apply --no-delete --remote production
 TWENTY_REMOTE=production yarn configure:native-sales --locale pt-BR
 ```
 
 O bootstrap é aditivo e gera o SDK antes do build completo. A instalação configura funis/etapas, filtros, ações diretas, menu com seis itens e abertura lateral nativa. O padrão PT-BR usa BRL para novos valores; valores existentes não são convertidos. Não execute testes de integração contra produção e não use `twenty docker:start` para hospedar o servidor publicado. Atualizações do aplicativo publicadas/instaladas exigem aumento de versão.
 
-O workflow manual `.github/workflows/cd.yml` instala a extensão usando o environment protegido `production` e os valores `TWENTY_DEPLOY_URL` e `TWENTY_DEPLOY_API_KEY`. Ele complementa a infraestrutura; não a provisiona. Proteja esse environment com revisores e use uma chave restrita ao workspace pretendido.
+No servidor fixado v2.50.1, a instalação de tarball encontrou a restrição `CHK_FILE_PENDING_MIME_OCTET_STREAM`. O procedimento validado preserva essa restrição e usa sincronização aditiva. O bootstrap cria a instalação de desenvolvimento de forma idempotente antes do primeiro upload; não use uninstall para corrigir esse erro. O pacote 0.1.0 foi publicado no registro privado, mas a instalação ativa foi concluída por `apply --no-delete`.
+
+O workflow manual `.github/workflows/cd.yml` sincroniza a extensão usando o environment protegido `production` e os valores `TWENTY_DEPLOY_URL` e `TWENTY_DEPLOY_API_KEY`. Ele complementa a infraestrutura; não a provisiona. Proteja esse environment com revisores e use uma chave restrita ao workspace pretendido.
 
 ### E-mail, IA e funções
 
@@ -113,6 +114,8 @@ yarn typecheck:deployment
 yarn test:deployment
 yarn test:deployment:docker
 ```
+
+SMTP e IA foram adiados a pedido do usuário. A estrutura não tem credenciais do RD e nenhuma importação foi iniciada.
 
 A última verificação requer Docker/BuildKit e cria uma rede, contêineres e volumes com prefixo aleatório `crm-railway-smoke-*`. Constrói as imagens de produção, inicia o worker antes dos dados, executa migrações em banco vazio, verifica `/healthz`, início do worker, autenticação Redis e persistência PostgreSQL/Redis após reiniciar. No final remove somente seus próprios recursos. Não acessa os dados do Twenty local em `localhost:2020`.
 

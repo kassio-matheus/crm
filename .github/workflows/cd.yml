@@ -36,7 +36,7 @@ jobs:
       - name: Bootstrap additive metadata and generate the workspace SDK
         run: yarn setup:workspace --model-only
       - run: yarn typecheck && yarn lint && yarn test:unit && yarn test:deployment
-      - run: yarn twenty dev:build
-      - run: yarn twenty app:publish --private --remote production
-      - run: yarn twenty app:install --remote production
+      # The pinned server's tarball installer violates its pending-file MIME
+      # constraint. Use the validated additive sync path; keep DB constraints.
+      - run: twenty app apply --no-delete --remote production
       - run: yarn configure:native-sales --locale pt-BR

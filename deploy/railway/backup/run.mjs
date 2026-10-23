@@ -45,7 +45,7 @@ try {
   directory = await mkdtemp(join(tmpdir(), 'crm-backup-'));
   const path = join(directory, 'database.dump.enc');
   child = spawn(
-    'pg_dump',
+    '/usr/libexec/postgresql16/pg_dump',
     ['--format=custom', '--compress=6', '--no-owner', '--no-acl'],
     {
       env: {

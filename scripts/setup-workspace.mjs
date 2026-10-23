@@ -11,6 +11,11 @@ import {
 import { execFileSync } from 'node:child_process';
 import { tmpdir, homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { ensureAppUsingStandaloneCli } from './ensure-workspace-app.mjs';
+import {
+  APPLICATION_UNIVERSAL_IDENTIFIER,
+  APP_DISPLAY_NAME,
+} from '../src/constants/universal-identifiers.ts';
 
 // A fresh SDK has no workspace schema. Sync only metadata first, generate it, then sync the full app.
 const root = resolve(import.meta.dirname, '..');
@@ -82,6 +87,13 @@ try {
       shellLauncher ? args : [yarnLauncher, ...args],
       { cwd: root, stdio: 'inherit' },
     );
+  // The isolated integration harness has its own test-only credentials/config.
+  // Never route that harness through the developer's standalone CLI remote.
+  if (process.env.NODE_ENV !== 'test' && !process.argv.includes('--plan-only'))
+    ensureAppUsingStandaloneCli({
+      universalIdentifier: APPLICATION_UNIVERSAL_IDENTIFIER,
+      name: APP_DISPLAY_NAME,
+    });
   runYarn([
     'twenty',
     process.argv.includes('--plan-only') ? 'plan' : 'apply',

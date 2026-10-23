@@ -17,17 +17,15 @@ This record concerns infrastructure packaging and startup. It does not replace t
 
 The first two smoke attempts exposed an incompatibility in the test's `docker top` invocation on Docker Desktop: the output must include a PID column. The check was corrected to `pid,args`; the final complete smoke run passed. Worker logs from the earlier run also confirmed actual cron jobs were processed. No production data was involved.
 
-## Cloud checks still required
+## Cloud acceptance in progress — 2026-10-23
 
-The pinned Railway CLI 5.71.0 recognizes the local account. No project is linked; `railway config plan` stops with “No linked project found.” No paid services, template draft, public deploy link or production deployment were created.
+- A dedicated Railway production environment was provisioned with Twenty, worker, PostgreSQL 16, Redis 7.4, private native S3 storage and two persistent volumes totaling 5 GiB. The existing Hobby plan and workspace spending cap were preserved.
+- The first administrator completed native onboarding and created the workspace. HTTPS login and `/healthz` passed at the final domain.
+- A production preflight check rejected invalid secrets before startup. The native IaC `generator` property had been interpreted as a literal expression. Provisioning now generates five independent 256-bit secrets with Node crypto, saves shared variables through secret-safe stdin, and references them from IaC. Existing values are preserved and malformed values fail closed. PostgreSQL authentication was repaired before CRM data initialization; the temporary repair start command was removed.
+- `TRUST_PROXY=1` corrects OAuth discovery behind Railway's HTTPS edge. After a domain rename, server/worker must be redeployed: a live upload test exposed stale links to the previous domain. After redeployment the upload target used the final origin and an authenticated upload returned HTTP 204 through Twenty to the private bucket.
+- Native volume backup scheduling was rejected by Railway because it requires Pro. No Pro upgrade or native snapshot schedule was enabled. An encrypted daily logical PostgreSQL backup service is included instead; first cloud run and restore acceptance are recorded below when completed.
+- Current deployment validation passes 22 targeted tests, including cryptographic round-trip/tamper rejection and daily cron configuration. Deployment typecheck and lint pass. The backup Dockerfile builds from the pinned official image; it reuses that image's PostgreSQL client and AWS SDK.
 
-The following require a selected Railway project and a cloud acceptance run:
+Still required before describing the deployment as fully accepted: install/configure the CRM extension; verify native funnel columns, actions, menu and import page; run/decrypt/restore a real backup in isolation; verify attachment download; configure and test SMTP and any AI provider. External backup of bucket attachments, a reusable template draft/clone and disaster recovery across a lost Railway project are separate pending work. No integration suite is run against production.
 
-1. Apply/reapply the native IaC configuration and verify secret preservation, database volumes, daily/weekly snapshot schedules, bucket provisioning and private DNS.
-2. Check the generated HTTPS domain/port, fresh first-admin onboarding, worker jobs and installed CRM extension in that environment.
-3. Upload/download an actual attachment through Twenty to the Railway bucket and repeat after a redeploy. Configure and test separate bucket backups.
-4. Configure SMTP and confirm invitation/password-reset delivery; configure any AI provider privately.
-5. Generate/review a template draft; remove live credentials, retain references and fresh generators, then deploy the template into a separate project. Verify isolated volumes/bucket, distinct secrets and domain before sharing its real button.
-6. Test restoration of database, files and encryption keys in a separate environment.
-
-See [RAILWAY.md](RAILWAY.md) for the deployment commands, template registration and production acceptance procedure. A successful local rehearsal is not a claim that the Railway account/environment or template clone has already been validated.
+See [RAILWAY.md](RAILWAY.md) for operations and recovery instructions.

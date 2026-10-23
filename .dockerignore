@@ -9,6 +9,8 @@
 !deploy/railway/redis/
 !deploy/railway/redis/Dockerfile
 !deploy/railway/redis/entrypoint.sh
+!deploy/railway/backup/
+!deploy/railway/backup/**
 
 !deploy/native-ui/
 !deploy/native-ui/apply.mjs

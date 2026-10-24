@@ -15,7 +15,11 @@ export const ImportOwnerPanel = ({
   const rows = Object.values(owners ?? {});
   const matched = rows.filter((row) => row.status === 'matched').length;
   return (
-    <section className="ri-card" aria-label="Associação dos proprietários">
+    <section
+      className="ri-card"
+      style={{ marginTop: 20 }}
+      aria-label="Associação dos proprietários"
+    >
       <div className="ri-card-header">
         <h2>
           <IconUsers size={18} aria-hidden /> Proprietários e responsáveis
@@ -35,9 +39,11 @@ export const ImportOwnerPanel = ({
         Contatos mantêm seus vínculos com empresas e negociações.
       </p>
       <p className="ri-fine-print">
-        {dryRun
-          ? 'Esta conferência não altera registros. Os vínculos serão refeitos ao criar a amostra.'
-          : 'Conferência dos membros no momento desta criação; uma nova simulação atualiza a lista.'}{' '}
+        {!rows.length
+          ? 'Os usuários e suas correspondências aparecerão após a próxima simulação.'
+          : dryRun
+            ? 'Esta conferência não altera registros. Os vínculos serão refeitos ao criar a amostra.'
+            : 'Conferência dos membros no momento desta criação; uma nova simulação atualiza a lista.'}{' '}
         Membros ausentes ou e-mails ambíguos deixam o vínculo vazio, sem
         atribuir a outra pessoa. Tarefas com vários responsáveis no RD mantêm a
         lista no registro de origem, pois o Twenty admite um responsável por

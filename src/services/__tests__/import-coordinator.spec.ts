@@ -83,6 +83,7 @@ describe('ImportCoordinator', () => {
     await new ImportCoordinator().control('simulate');
     expect(JSON.stringify(mocks.enqueue.mock.calls)).not.toContain('SECRET');
     expect(JSON.stringify(mocks.mutation.mock.calls)).not.toContain('SECRET');
+    expect(mocks.set).toHaveBeenCalledWith('rd:simulation-pipelines', []);
   });
   it('uses identical queue IDs for simultaneous first commands', async () => {
     const existing = state();

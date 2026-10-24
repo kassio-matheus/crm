@@ -217,6 +217,8 @@ export class ImportCoordinator {
     if (action === 'simulate' && !state.dryRun)
       throw new Error('A live migration already exists. Resume it instead.');
     await kv.set('rd:pause', false);
+    if (action === 'simulate' && state !== previous)
+      await kv.set('rd:simulation-pipelines', []);
     // Duplicate clicks use the same resume ID. A completed/failed queue item is never silently re-enqueued.
     const token = `${state.id}-${state.revision}-${job?.jobId ?? 'initial'}-${job?.attemptsMade ?? 0}`;
     const jobId = `rd-command-${sourceId(token)}`;

@@ -72,12 +72,23 @@ export const ImportOverview = ({
       Icon: IconRefresh,
     },
     {
-      title: 'Criados no Twenty',
-      value: number(state?.created),
+      title:
+        sample && state?.preview ? 'Registros da amostra' : 'Criados no Twenty',
+      value: number(
+        sample && state?.preview
+          ? state.preview.status === 'REMOVED'
+            ? 0
+            : state.preview.owned
+          : state?.created,
+      ),
       note:
-        state?.dryRun === false
-          ? 'Registros criados nesta migração'
-          : 'Simulação não cria dados de negócio',
+        sample && state?.preview
+          ? state.preview.status === 'REMOVED'
+            ? 'Dados operacionais enviados à lixeira'
+            : 'Rastreamento de exclusão; inclui vínculos'
+          : state?.dryRun === false
+            ? 'Registros criados nesta migração'
+            : 'Simulação não cria dados de negócio',
       Icon: IconCheck,
     },
     {

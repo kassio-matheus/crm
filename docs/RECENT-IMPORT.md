@@ -2,16 +2,30 @@
 
 ## Fluxo da página
 
-1. **Simular dados recentes:** lê até 25 negociações em ordem de criação decrescente, usando uma data de corte fixa. Busca por ID as empresas e o contato principal necessários, mesmo quando são antigos. Verifica os valores projetados e conflitos de e-mail sem criar dados operacionais.
+1. **Simular dados recentes:** lê até 125 negociações em ordem de criação decrescente, usando uma data de corte fixa. Busca por ID as empresas e o contato principal necessários, mesmo quando são antigos. Verifica os valores projetados e conflitos de e-mail sem criar dados operacionais.
 2. **Criar amostra no Twenty:** cria exatamente os IDs de negociação verificados, seus vínculos, funis e etapas. Inclui uma amostra de até cinco tarefas por negociação. Isso não representa validação de toda a base, de todos os anexos ou do histórico antigo.
 3. **Excluir dados da amostra:** opcionalmente envia à lixeira apenas os registros operacionais novos identificados pelo teste. O histórico técnico, snapshots e comprovantes são mantidos para auditoria e recuperação. Não há destroy/purge. Registros anteriores não são associados à amostra por nome ou semelhança.
 4. **Importar tudo de vez:** ação separada, com conferência do backup e confirmação no diálogo do Twenty. Percorre todos os recursos acessíveis pela API, priorizando as negociações recentes e buscando suas referências conforme necessário. A amostra é incorporada sem duplicações; se tiver sido enviada à lixeira pelo botão, seus registros são restaurados antes da leitura completa. A exclusão de teste fica desativada depois dessa promoção.
+
+## Ampliar a amostra e associar proprietários
+
+A amostra passou de 25 para **125 negociações**. As páginas da API continuam com 25 registros e as tarefas continuam limitadas a cinco por negociação, totalizando até 625 tarefas quando disponíveis. Contatos e empresas são trazidos conforme os vínculos das negociações; sua quantidade não é fixa. Uma simulação antiga mantém seu limite e sua seleção até uma nova simulação explícita.
+
+1. Cadastre os membros no Twenty com o **mesmo e-mail do RD**, conclua os convites e peça que aceitem antes de simular.
+2. Use **Simular dados recentes** novamente. O painel **Proprietários e responsáveis** compara o catálogo de usuários do RD aos membros existentes e mostra os encontrados, ausentes e ambíguos. Os totais representam o catálogo lido, não a quantidade de negociações atribuídas.
+3. Confira as pendências e use **Criar amostra no Twenty**. A criação relê o catálogo e os membros; usa o e-mail atual, ignorando maiúsculas e espaços nas pontas. Nenhuma conta, equipe, convite ou permissão é criada.
+
+Negociações recebem `ownerId`; empresas recebem `accountOwnerId`; tarefas recebem `assigneeId` quando há exatamente um responsável no RD. Contatos preservam as relações com empresas e negociações. Tarefas com vários responsáveis mantêm todos no snapshot original; o Twenty admite apenas um responsável por tarefa e o importador não escolhe arbitrariamente um deles.
+
+Na repetição, somente o vínculo de proprietário **vazio** pode ser preenchido, sempre pelo ID determinístico e pela referência exata de origem. A condição de vazio é verificada na mesma operação do banco que escreve o vínculo, protegendo uma atribuição manual concorrente. Proprietários já definidos e os demais campos permanecem preservados. E-mail ausente, sem membro correspondente ou ambíguo deixa o vínculo vazio para revisão; nunca usa nomes como alternativa.
+
+Uma nova simulação preserva os comprovantes de propriedade da amostra anterior. A criação ampliada reaproveita esses registros e adiciona os novos ao mesmo conjunto de exclusão. Se a amostra tinha sido excluída pelo botão, ela é restaurada antes da criação ampliada. A importação completa continua sendo uma ação separada; após sua conclusão não há sincronização recorrente automática.
 
 ## Além de 10.000 registros
 
 A [API v2 limita as listagens de empresas, contatos e negociações a 10.000 resultados por filtro](https://developers.rdstation.com/reference/crm-v2-introduction). O importador usa os filtros documentados de `created_at` e ordenação decrescente. Ao concluir a página 399 de 25 registros, se houver continuação, guarda a menor data dessa página como novo limite superior inclusivo e recomeça na página 1. A sobreposição retém todos os registros empatados na data de fronteira; os IDs determinísticos e comprovantes impedem outra criação.
 
-Não usa um limite global de registros no modo completo. O limite de 25 negociações pertence somente à amostra. Catálogos necessários são lidos primeiro, as negociações vêm antes da varredura das empresas e contatos sem vínculo já buscado, e os detalhes completos são percorridos na etapa própria. As demais entidades usam as ordenações disponíveis em sua API, como atualização decrescente para tarefas.
+Não usa um limite global de registros no modo completo. O limite de 125 negociações pertence somente à amostra. Catálogos necessários são lidos primeiro, as negociações vêm antes da varredura das empresas e contatos sem vínculo já buscado, e os detalhes completos são percorridos na etapa própria. As demais entidades usam as ordenações disponíveis em sua API, como atualização decrescente para tarefas.
 
 Se a janela inteira contiver registros com a mesma data e não puder diminuir o limite superior, o processo para com `RD_DENSE_TIMESTAMP_LIMIT`. Nunca avança subtraindo um segundo ou um milissegundo, pois isso poderia descartar empates não lidos. Esse caso requer uma divisão adicional específica da base. Datas inválidas, respostas fora da ordenação solicitada e links que removam ou alterem os filtros também interrompem a execução.
 
@@ -49,3 +63,9 @@ Revisão de 24/10/2026:
 - O diálogo de exclusão foi aberto e cancelado em produção, preservando a amostra para revisão. Exclusão e restauração efetivas foram exercitadas somente com fixtures no banco isolado.
 - A importação completa não foi iniciada. O avanço além de 10.000 foi exercitado com dados sintéticos; a conta inteira ainda depende da ação explícita do administrador e de sua reconciliação.
 - A sincronização inicial teve zero criações/exclusões de metadados e 13 atualizações: controles/worker, UI e as permissões necessárias de soft delete. Os ajustes posteriores atualizaram somente funções e a UI, também sem exclusões. Nenhuma alteração foi feita no RD.
+
+### Validação da ampliação para 125
+
+- 355 testes unitários passaram; o caso de cinco páginas congela exatamente 125 IDs e não segue para a página seguinte. Também há cobertura de e-mails normalizados, ausentes/ambíguos, responsáveis V2, referência de companhia e preservação do conjunto de exclusão ao ampliar.
+- Um teste de integração no Twenty isolado em `127.0.0.1:2021` passou: criação com proprietário, preenchimento de proprietário vazio na repetição, preservação de nome/proprietário manual e dos comprovantes de exclusão.
+- Typecheck e lint passaram. A nova simulação de 125 não foi executada na companhia real; aguarda o cadastro prévio do time pelo administrador.

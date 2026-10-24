@@ -20,7 +20,7 @@ export const confirmSampleAction = async (
       action === 'sample'
         ? {
             title: 'Criar a amostra recente no Twenty?',
-            subtitle: `Serão criadas até ${state.selection.limit} negociações recentes, seus contatos, empresas, funis, etapas e uma amostra de até cinco tarefas por negociação. Registros existentes serão preservados. Você poderá excluir os registros criados por este teste antes de iniciar a importação completa.`,
+            subtitle: `Serão criadas até ${state.selection.limit} negociações recentes, seus contatos, empresas, funis, etapas e uma amostra de até cinco tarefas por negociação. Registros existentes serão reaproveitados. Proprietários e responsáveis vazios poderão ser preenchidos por correspondência exata de e-mail; vínculos já definidos serão preservados. Você poderá excluir os registros criados por este teste antes de iniciar a importação completa.`,
             confirmButtonText: 'Criar amostra recente',
             confirmButtonAccent: 'blue',
           }

@@ -1,3 +1,5 @@
+import { RECENT_SAMPLE_LIMIT } from 'src/constants/recent-sample-limit';
+import { ImportOwnerPanel } from './import-owner-panel';
 import { useState } from 'react';
 import { Checkbox } from 'twenty-ui/primitives/input';
 import { Progress } from 'twenty-ui/primitives/feedback';
@@ -111,7 +113,9 @@ export const ImportOverview = ({
         <div className="ri-card-header">
           <h2>Teste primeiro. Importe toda a base depois.</h2>
           <Tag color={full ? 'blue' : 'orange'}>
-            {full ? 'Importação completa' : 'Amostra de até 25 negociações'}
+            {full
+              ? 'Importação completa'
+              : `Próxima amostra: até ${RECENT_SAMPLE_LIMIT} negociações`}
           </Tag>
         </div>
         <p className="ri-muted">
@@ -124,7 +128,10 @@ export const ImportOverview = ({
         <div className="ri-row" style={{ marginTop: 16, flexWrap: 'wrap' }}>
           <ImportButton
             disabled={
-              pending || running || !connected || state?.dryRun === false
+              pending ||
+              running ||
+              !connected ||
+              (state?.dryRun === false && !sample)
             }
             startIcon={<IconPlayerPlay size={15} />}
             onClick={() => onAction('simulate')}
@@ -164,6 +171,13 @@ export const ImportOverview = ({
             </ImportButton>
           )}
         </div>
+        <p className="ri-fine-print" style={{ marginTop: 12 }}>
+          Cadastre os membros com o mesmo e-mail usado no RD e peça que aceitem
+          o convite antes de simular. Uma nova simulação pode ampliar a amostra
+          existente; os registros já criados são reaproveitados. A criação
+          também preenche proprietários vazios quando encontra o membro,
+          preservando os já definidos.
+        </p>
         {state?.preview && (
           <p className="ri-fine-print" style={{ marginTop: 12 }}>
             {state.preview.owned.toLocaleString('pt-BR')} registros operacionais
@@ -199,6 +213,7 @@ export const ImportOverview = ({
           </>
         )}
       </section>
+      <ImportOwnerPanel owners={state?.owners} dryRun={state?.dryRun ?? true} />
       <div className="ri-metrics">
         {metrics.map(({ title, value, note, Icon }) => (
           <article className="ri-metric" key={title}>

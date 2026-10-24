@@ -161,3 +161,20 @@ it('does not mistake the previous completed sample for a confirmed full-import s
   expect(snapshots[snapshots.length - 1].pendingAction).toBeNull();
   monitor.stop();
 });
+
+it('permits another simulation after native sample creation, but never auto-runs it on mount', async () => {
+  execute.mockResolvedValue(
+    importState({
+      dryRun: false,
+      status: 'COMPLETED',
+      selection: { scope: 'sample', limit: 25, cutoff: '', selectedDeals: [] },
+    }),
+  );
+  const monitor = setup();
+  monitor.start();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(execute.mock.calls.map(([action]) => action)).toEqual(['status']);
+  expect(await monitor.command('simulate')).toBe(true);
+  expect(execute.mock.calls.map(([action]) => action)).toContain('simulate');
+  monitor.stop();
+});

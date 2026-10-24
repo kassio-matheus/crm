@@ -338,3 +338,33 @@ it('returns only safe live queue facts and pending pause without foreign failure
   expect(JSON.stringify(result)).not.toContain('SECRET');
   expect(mocks.mutation).not.toHaveBeenCalled();
 });
+
+it('allows enlarging a completed native sample without losing its deletion receipts', async () => {
+  const previous = {
+    ...state(),
+    dryRun: false,
+    status: 'COMPLETED' as const,
+    selection: {
+      scope: 'sample' as const,
+      limit: 25,
+      cutoff: '2026-10-24T00:00:00Z',
+      selectedDeals: ['one'],
+    },
+    preview: {
+      runId: 'original-preview',
+      status: 'AVAILABLE' as const,
+      owned: 93,
+      removed: 0,
+    },
+  };
+  mocks.query.mockResolvedValue({
+    rdSourceRecords: { edges: [{ node: { sourcePayload: previous } }] },
+  });
+  const next = await new ImportCoordinator().control('simulate');
+  expect(next).toMatchObject({
+    dryRun: true,
+    selection: { limit: 125 },
+    preview: previous.preview,
+  });
+  expect(mocks.enqueue).toHaveBeenCalledTimes(1);
+});

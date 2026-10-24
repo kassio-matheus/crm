@@ -98,7 +98,16 @@ export class ImportCoordinator {
       return state;
     const previous = state;
     let transitionId: string | undefined;
-    if (action === 'simulate' && (!state || state.dryRun))
+    if (
+      action === 'simulate' &&
+      state &&
+      !state.dryRun &&
+      state.selection?.scope !== 'sample'
+    ) {
+      if (state.status === 'COMPLETED') return state;
+      throw new Error('A live migration already exists. Resume it instead.');
+    }
+    if (action === 'simulate')
       state = newRecentImport(credentials, state, 'sample', true);
     else if (action === 'sample') {
       if (

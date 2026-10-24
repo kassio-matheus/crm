@@ -1,6 +1,7 @@
 import type { ImportActivity } from 'src/types/import-activity';
 import type { ImportSelection } from 'src/types/import-selection';
 import type { ImportPreview } from 'src/types/import-preview';
+import type { ImportOwnerMatch } from 'src/types/import-owner-match';
 export type ImportState = {
   id: string;
   accountKey: string;
@@ -38,4 +39,5 @@ export type ImportState = {
   selection?: ImportSelection;
   preview?: ImportPreview;
   maintenance?: 'cleanup' | 'restore';
+  owners?: Record<string, ImportOwnerMatch>;
 };

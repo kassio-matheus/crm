@@ -467,3 +467,60 @@ describe('repeated imports against persisted destination state', () => {
     expect(api.write).not.toHaveBeenCalled();
   });
 });
+
+describe('owner association on record replay', () => {
+  it.each([
+    ['deals', 'updateOpportunities', 'ownerId'],
+    ['organizations', 'updateCompanies', 'accountOwnerId'],
+    ['tasks', 'updateTasks', 'assigneeId'],
+  ])(
+    'fills only an empty %s owner after the member is registered',
+    async (kind, operation, field) => {
+      const key = `acme:${kind}:existing`;
+      query.mockImplementation(async (request) => {
+        if (request.workspaceMembers)
+          return {
+            workspaceMembers: {
+              edges: [
+                { node: { id: 'member', userEmail: 'owner@example.com' } },
+              ],
+              pageInfo: { hasNextPage: false },
+            },
+          };
+        if (request.rdSourceRecords.__args.filter.sourceKey)
+          return {
+            rdSourceRecords: {
+              edges: [
+                {
+                  node: {
+                    sourcePayload: { id: 'user', email: 'owner@example.com' },
+                  },
+                },
+              ],
+            },
+          };
+        return {
+          rdSourceRecords: { edges: [{ node: { targetId: sourceId(key) } }] },
+        };
+      });
+      expect(
+        await new RecordImporter(client).import(
+          kind,
+          { id: 'existing', owner_id: 'user' },
+          'acme',
+          'run',
+          false,
+        ),
+      ).toBe('skipped');
+      expect(mutation).toHaveBeenCalledTimes(1);
+      expect(mutation.mock.calls[0][0][operation].__args).toEqual({
+        filter: {
+          id: { eq: sourceId(key) },
+          rdSourceKey: { eq: key },
+          [field]: { is: 'NULL' },
+        },
+        data: { [field]: 'member' },
+      });
+    },
+  );
+});

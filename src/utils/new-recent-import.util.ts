@@ -2,6 +2,7 @@ import type { ImportState } from 'src/types/import-state';
 import type { RdCredentials } from 'src/types/rd-credentials';
 import { sourceId } from 'src/utils/source-id.util';
 import { recentImportPlan } from 'src/utils/recent-import-plan.util';
+import { RECENT_SAMPLE_LIMIT } from 'src/constants/recent-sample-limit';
 
 export const newRecentImport = (
   credentials: RdCredentials,
@@ -49,27 +50,44 @@ export const newRecentImport = (
     plan: recentImportPlan(scope === 'sample'),
     selection: {
       scope,
-      limit: 25,
+      limit:
+        scope === 'sample' && !dryRun
+          ? previous!.selection!.limit
+          : RECENT_SAMPLE_LIMIT,
       cutoff: scope === 'sample' && !dryRun ? previous!.selection!.cutoff : now,
       selectedDeals:
         scope === 'sample' && !dryRun
           ? [...previous!.selection!.selectedDeals]
           : [],
     },
-    ...(scope === 'sample' && !dryRun
+    ...(scope === 'sample' && previous?.preview
       ? {
-          preview: {
-            runId: previous!.id,
-            status: 'AVAILABLE',
-            owned: 0,
-            removed: 0,
-          },
+          preview: { ...previous.preview },
+          ...(!dryRun && previous.preview.status === 'REMOVED'
+            ? {
+                preview: {
+                  ...previous.preview,
+                  status: 'AVAILABLE',
+                  removed: 0,
+                },
+                maintenance: 'restore',
+              }
+            : {}),
         }
-      : scope === 'all' && previous?.preview
+      : scope === 'sample' && !dryRun
         ? {
-            preview: { ...previous.preview, status: 'PROMOTED' },
-            maintenance: 'restore',
+            preview: {
+              runId: previous!.id,
+              status: 'AVAILABLE',
+              owned: 0,
+              removed: 0,
+            },
           }
-        : {}),
+        : scope === 'all' && previous?.preview
+          ? {
+              preview: { ...previous.preview, status: 'PROMOTED' },
+              maintenance: 'restore',
+            }
+          : {}),
   };
 };

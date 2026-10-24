@@ -207,7 +207,8 @@ export class ImportMonitor {
     if (
       action === 'simulate' &&
       state &&
-      (!state.dryRun || ['RUNNING', 'READY'].includes(state.status))
+      ((!state.dryRun && state.selection?.scope !== 'sample') ||
+        ['RUNNING', 'READY'].includes(state.status))
     )
       return false;
     this.generation += 1;

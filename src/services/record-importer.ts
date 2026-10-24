@@ -1,16 +1,26 @@
+import type { ImportOwnerMatch } from 'src/types/import-owner-match';
 import { CoreApiClient, type CoreSchema } from 'twenty-client-sdk/core';
+import { ImportOwners } from 'src/services/import-owners';
 import { AttachmentImporter } from 'src/services/attachment-importer';
 import { NativePipelineViews } from 'src/services/native-pipeline-views';
 import { sourceId } from 'src/utils/source-id.util';
 import { mapRdRecord } from 'src/utils/map-rd-record.util';
 import { sanitizeSource } from 'src/utils/sanitize-source.util';
 
-/** Create-only import: never updates, merges by name/email, deletes or overwrites a user's edits. */
+/** Create-only data import; replay may fill an empty native owner with an exact member match. */
 export class RecordImporter {
+  private owners: ImportOwners;
   constructor(
     private client = new CoreApiClient(),
     private views = new NativePipelineViews(),
-  ) {}
+  ) {
+    this.owners = new ImportOwners(this.client);
+  }
+
+  withOwnerCatalog(catalog: Record<string, ImportOwnerMatch>): this {
+    this.owners = new ImportOwners(this.client, catalog);
+    return this;
+  }
 
   async import(
     kind: string,
@@ -67,12 +77,19 @@ export class RecordImporter {
         edges: { node: { id: true, targetId: true } },
       },
     });
+    const owner = await this.owners.forRecord(kind, record, account);
     // Older releases archived catalogs only. Replaying them can safely create native catalogs.
     if (
       archive.rdSourceRecords!.edges[0]?.node.targetId &&
       !['pipelines', 'stages'].includes(kind)
-    )
+    ) {
+      if (
+        archive.rdSourceRecords!.edges[0]?.node.targetId === id &&
+        owner?.memberId
+      )
+        await this.owners.fillMissing(kind, key, owner.memberId);
       return 'skipped';
+    }
     if (!archive.rdSourceRecords!.edges.length) {
       await this.client.mutation({
         createRdSourceRecord: {
@@ -184,7 +201,13 @@ export class RecordImporter {
       if (!existing.companies!.edges.length) {
         await this.client.mutation({
           createCompany: {
-            __args: { data: { ...data, id } as CoreSchema.CompanyCreateInput },
+            __args: {
+              data: {
+                ...data,
+                id,
+                accountOwnerId: owner?.memberId ?? null,
+              } as CoreSchema.CompanyCreateInput,
+            },
             id: true,
           },
         });
@@ -224,14 +247,8 @@ export class RecordImporter {
         const pointOfContactId = contactId
           ? await this.resolve(account, 'contacts', contactId)
           : null;
-        const rdOwnerId = String(data.rdOwnerId ?? '');
-        const user = rdOwnerId
-          ? await this.snapshot(account, 'users', rdOwnerId)
-          : null;
-        const ownerId = user?.email
-          ? await this.findMember(String(user.email))
-          : null;
-        const rdOwnerName = String(user?.name ?? data.rdOwnerName ?? '');
+        const ownerId = owner?.memberId ?? null;
+        const rdOwnerName = String(owner?.name || data.rdOwnerName || '');
         if (!data.salesPipelineKey && data.salesStageKey) {
           const stage = await this.snapshot(
             account,
@@ -296,14 +313,7 @@ export class RecordImporter {
         ? await this.resolve(account, 'deals', dealId)
         : null;
       if (kind === 'tasks') {
-        const userIds = Array.isArray(record.user_ids) ? record.user_ids : [];
-        const assignedUserId = record.owner_id ?? record.user_id ?? userIds[0];
-        const assignedUser =
-          typeof assignedUserId === 'string'
-            ? await this.snapshot(account, 'users', assignedUserId)
-            : null;
-        if (assignedUser?.email)
-          data.assigneeId = await this.findMember(String(assignedUser.email));
+        data.assigneeId = owner?.memberId ?? null;
         const existing = await this.client.query({
           tasks: {
             __args: { first: 1, filter: { id: { eq: id } } },
@@ -373,6 +383,8 @@ export class RecordImporter {
         }
       }
     }
+    if (!created && owner?.memberId)
+      await this.owners.fillMissing(kind, key, owner.memberId);
     await this.client.mutation({
       updateRdSourceRecord: {
         __args: {
@@ -432,20 +444,5 @@ export class RecordImporter {
         unknown
       > | null) ?? null
     );
-  }
-
-  private async findMember(email: string): Promise<string | null> {
-    const result = await this.client.query({
-      workspaceMembers: {
-        __args: {
-          filter: { userEmail: { eq: email.toLowerCase() } },
-          first: 2,
-        },
-        edges: { node: { id: true } },
-      },
-    });
-    return result.workspaceMembers!.edges.length === 1
-      ? result.workspaceMembers!.edges[0].node.id
-      : null;
   }
 }

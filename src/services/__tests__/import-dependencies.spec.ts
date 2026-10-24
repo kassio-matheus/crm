@@ -1,3 +1,4 @@
+import { sourceId } from 'src/utils/source-id.util';
 import { expect, it, vi } from 'vitest';
 import type { CoreApiClient } from 'twenty-client-sdk/core';
 import type { RecordImporter } from '../record-importer';
@@ -74,4 +75,32 @@ it('deduplicates validated dependencies across sample pages without writing busi
   expect(test.list).toHaveBeenCalledTimes(1);
   expect(test.run.mock.calls[0][4]).toBe(true);
   expect(test.state.selection.dependencyKeys).toHaveLength(1);
+});
+
+it('replays an existing linked company to fill its empty owner without another RD request', async () => {
+  const test = setup();
+  const source = { id: 'org', owner_id: 'owner' };
+  test.query.mockResolvedValue({
+    rdSourceRecords: {
+      edges: [
+        {
+          node: {
+            targetId: sourceId(`${test.state.accountKey}:organizations:org`),
+            sourcePayload: source,
+          },
+        },
+      ],
+    },
+  });
+  await test.service.ensure('deals', { organization_id: 'org' });
+  await test.service.ensure('deals', { organization_id: 'org' });
+  expect(test.list).not.toHaveBeenCalled();
+  expect(test.run).toHaveBeenCalledTimes(1);
+  expect(test.run).toHaveBeenCalledWith(
+    'organizations',
+    source,
+    test.state.accountKey,
+    test.state.id,
+    false,
+  );
 });

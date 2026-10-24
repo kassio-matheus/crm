@@ -11,6 +11,7 @@ import { appendImportActivity } from 'src/utils/append-import-activity.util';
 import { advanceSourceWindow } from 'src/utils/advance-source-window.util';
 import { PacedRdReader } from 'src/services/paced-rd-reader';
 import { ImportDependencies } from 'src/services/import-dependencies';
+import { ImportOwners } from 'src/services/import-owners';
 import { ImportPreviewLedger } from 'src/services/import-preview-ledger';
 import type { ImportTransition } from 'src/types/import-transition';
 import type { ImportState } from 'src/types/import-state';
@@ -188,6 +189,7 @@ export class ImportWorker {
       const importer = ledger
         ? new RecordImporter(ledger.client())
         : this.importer;
+      if (state.owners) importer.withOwnerCatalog?.(state.owners);
       const dependencies = state.selection
         ? new ImportDependencies(reader, importer, state, this.core)
         : null;
@@ -282,6 +284,7 @@ export class ImportWorker {
         );
       state.pageSignature = signature;
       await this.coordinator.save(state);
+      const owners = new ImportOwners(this.core);
       let offset = state.recordOffset ?? 0;
       if (offset > page.records.length)
         throw new Error(
@@ -290,6 +293,11 @@ export class ImportWorker {
       // Cursor advancement only follows a fully persisted page. Partial writes are create-only on replay.
       for (; offset < page.records.length; offset += 1) {
         const record = page.records[offset];
+        if (state.selection && work.kind === 'users') {
+          const match = await owners.match(record);
+          state.owners ??= {};
+          if (match.sourceId) state.owners[match.sourceId] = match;
+        }
         if (dependencies) await dependencies.ensure(work.kind, record);
         const result = await importer.import(
           work.kind,

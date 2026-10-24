@@ -33,10 +33,27 @@ export class ImportDependencies {
             first: 1,
             filter: { id: { eq: sourceId(`archive:${key}`) } },
           },
-          edges: { node: { targetId: true } },
+          edges: { node: { targetId: true, sourcePayload: true } },
         },
       });
-      if (!existing.rdSourceRecords!.edges[0]?.node.targetId) {
+      const archived = existing.rdSourceRecords!.edges[0]?.node;
+      if (
+        !this.state.dryRun &&
+        dependency.kind === 'organizations' &&
+        archived?.targetId === sourceId(key)
+      ) {
+        const source = archived.sourcePayload as
+          Record<string, unknown> | undefined;
+        if (source && (source.id ?? source._id) === dependency.id)
+          await this.importer.import(
+            dependency.kind,
+            source,
+            this.state.accountKey,
+            this.state.id,
+            false,
+          );
+      }
+      if (!archived?.targetId) {
         const response = await this.reader.list(
           `${dependency.kind}/${encodeURIComponent(dependency.id)}`,
           1,

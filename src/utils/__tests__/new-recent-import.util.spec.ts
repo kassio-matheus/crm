@@ -13,7 +13,7 @@ it('starts a new bounded recent simulation without reusing legacy resource index
     page: 1,
     processed: 0,
     dryRun: true,
-    selection: { scope: 'sample', limit: 25 },
+    selection: { scope: 'sample', limit: 125 },
   });
   expect(old.page).toBe(401);
   expect(state.revision).toBeGreaterThan(old.revision);
@@ -46,3 +46,41 @@ it('refuses unsupported v1 complete-filter guarantees', () =>
   expect(() =>
     newRecentImport({ ...credentials, version: 'v1' }, null, 'sample', true),
   ).toThrow('RD_V2_REQUIRED'));
+
+it('preserves previous sample ownership while simulating and creating a larger sample', () => {
+  const old = newRecentImport(
+    credentials,
+    newRecentImport(credentials, null, 'sample', true),
+    'sample',
+    false,
+  );
+  old.selection!.limit = 25;
+  old.preview!.owned = 93;
+  const dry = newRecentImport(credentials, old, 'sample', true);
+  expect(dry.selection!.limit).toBe(125);
+  expect(dry.preview).toEqual(old.preview);
+  expect(dry.selection!.selectedDeals).toEqual([]);
+  const live = newRecentImport(credentials, dry, 'sample', false);
+  expect(live.preview!.runId).toBe(old.preview!.runId);
+  expect(live.preview!.owned).toBe(93);
+});
+it('preserves a previously simulated limit and restores an excluded sample before expansion', () => {
+  const old = newRecentImport(
+    credentials,
+    newRecentImport(credentials, null, 'sample', true),
+    'sample',
+    false,
+  );
+  old.preview!.status = 'REMOVED';
+  old.preview!.removed = 93;
+  const dry = newRecentImport(credentials, old, 'sample', true);
+  expect(dry.maintenance).toBeUndefined();
+  const live = newRecentImport(credentials, dry, 'sample', false);
+  expect(live.maintenance).toBe('restore');
+  expect(live.preview!.status).toBe('AVAILABLE');
+  expect(live.preview!.runId).toBe(old.preview!.runId);
+  dry.selection!.limit = 25;
+  expect(
+    newRecentImport(credentials, dry, 'sample', false).selection!.limit,
+  ).toBe(25);
+});

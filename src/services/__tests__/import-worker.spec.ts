@@ -277,6 +277,30 @@ describe('recent sample and complete date windows', () => {
     expect(state.counts.deals).toBe(25);
     expect(state.resourceIndex).toBe(1);
   });
+  it('simulates five pages of 25 deals, freezes exactly 125 IDs and stops before older pages', async () => {
+    credentials();
+    const current = recent();
+    current.selection.limit = 125;
+    const { worker, state, importer } = setup(current);
+    for (let page = 0; page < 5; page += 1) {
+      state.nextRequestAt = 0;
+      mocks.list.mockResolvedValue({
+        records: records().map((record, index) => ({
+          ...record,
+          id: `deal-${page * 25 + index}`,
+        })),
+        hasMore: true,
+        next: `page-${page + 2}`,
+      });
+      await worker.run({});
+      expect(state.counts.deals).toBe((page + 1) * 25);
+      expect(state.resourceIndex).toBe(page === 4 ? 1 : 0);
+    }
+    expect(state.selection!.selectedDeals).toHaveLength(125);
+    expect(new Set(state.selection!.selectedDeals).size).toBe(125);
+    expect(importer.import).toHaveBeenCalledTimes(125);
+    expect(state.nextPath).toBeNull();
+  });
   it('starts a new overlapping window before requesting the 10,000-record boundary', async () => {
     credentials();
     const current: ImportState = recent();
@@ -316,15 +340,13 @@ describe('recent sample and complete date windows', () => {
     const transitionId = sourceId(
       `scope-transition:${previous.id}:${previous.revision}`,
     );
-    const query = vi
-      .fn()
-      .mockResolvedValue({
-        rdSourceRecords: {
-          edges: [
-            { node: { sourcePayload: { previous, next, action: 'simulate' } } },
-          ],
-        },
-      });
+    const query = vi.fn().mockResolvedValue({
+      rdSourceRecords: {
+        edges: [
+          { node: { sourcePayload: { previous, next, action: 'simulate' } } },
+        ],
+      },
+    });
     const save = vi.fn();
     const enqueueNext = vi.fn();
     const read = vi.fn().mockResolvedValue(previous);

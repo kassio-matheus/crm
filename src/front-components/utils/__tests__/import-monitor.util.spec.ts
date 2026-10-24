@@ -133,3 +133,31 @@ it('allows full import from a completed native sample and rejects deleting a pro
   expect(await full.command('cleanup')).toBe(false);
   full.stop();
 });
+it('does not mistake the previous completed sample for a confirmed full-import scope change', async () => {
+  const current = importState({
+    status: 'COMPLETED',
+    dryRun: false,
+    selection: {
+      scope: 'sample',
+      limit: 25,
+      cutoff: '2026-10-24T00:00:00Z',
+      selectedDeals: ['one'],
+    },
+  });
+  execute.mockResolvedValue(current);
+  const monitor = setup();
+  monitor.start();
+  await vi.advanceTimersByTimeAsync(0);
+  await monitor.command('start');
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(snapshots[snapshots.length - 1].pendingAction).toBe('start');
+  execute.mockResolvedValue({
+    ...current,
+    id: 'new-full-run',
+    status: 'RUNNING',
+    selection: { ...current.selection, scope: 'all' },
+  });
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(snapshots[snapshots.length - 1].pendingAction).toBeNull();
+  monitor.stop();
+});

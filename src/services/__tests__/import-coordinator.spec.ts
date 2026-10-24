@@ -26,6 +26,7 @@ vi.mock('twenty-sdk/logic-function', () => ({
 }));
 import { ImportCoordinator } from '../import-coordinator';
 import type { ImportState } from 'src/types/import-state';
+import type { ImportTransition } from 'src/types/import-transition';
 const state = (): ImportState => ({
   id: 'run',
   accountKey: 'acme',
@@ -71,6 +72,90 @@ beforeEach(() => {
   });
 });
 describe('ImportCoordinator', () => {
+  it('uses the same atomic winning transition and queue slot for competing sample and full-import commands', async () => {
+    const previous = {
+      ...state(),
+      status: 'COMPLETED' as const,
+      phase: 'done' as const,
+      selection: {
+        scope: 'sample' as const,
+        limit: 25,
+        cutoff: '2026-10-24T00:00:00Z',
+        selectedDeals: ['one'],
+      },
+    };
+    let retained: ImportTransition | undefined;
+    let retainedId: string | undefined;
+    mocks.query.mockImplementation(async (request) => ({
+      rdSourceRecords: {
+        edges: [
+          {
+            node: {
+              sourcePayload:
+                request.rdSourceRecords.__args.filter.id.eq === retainedId
+                  ? retained
+                  : previous,
+            },
+          },
+        ],
+      },
+    }));
+    mocks.mutation.mockImplementation(async (request) => {
+      const create = request.createRdSourceRecord?.__args.data;
+      if (create?.recordKind === 'scopeTransition') {
+        if (retained) throw new Error('unique transition');
+        retained = structuredClone(create.sourcePayload);
+        retainedId = create.id;
+      }
+      return {};
+    });
+    const [sample, full] = await Promise.all([
+      new ImportCoordinator().control('sample'),
+      new ImportCoordinator().control('start'),
+    ]);
+    expect(sample?.id).toBe(full?.id);
+    expect(mocks.enqueue.mock.calls[0][0].jobs[0].jobId).toBe(
+      mocks.enqueue.mock.calls[1][0].jobs[0].jobId,
+    );
+    expect(mocks.enqueue.mock.calls[0][0].jobs[0].payload.transitionId).toBe(
+      retainedId,
+    );
+    expect(
+      mocks.mutation.mock.calls.some(
+        ([request]) => request.updateRdSourceRecord,
+      ),
+    ).toBe(false);
+  });
+  it('keeps a durable scope proposal recoverable after initialization fails, choosing one fixed retry slot', async () => {
+    const previous = {
+      ...state(),
+      status: 'COMPLETED' as const,
+      phase: 'done' as const,
+      selection: {
+        scope: 'sample' as const,
+        limit: 25,
+        cutoff: '2026-10-24T00:00:00Z',
+        selectedDeals: ['one'],
+      },
+    };
+    mocks.query.mockResolvedValue({
+      rdSourceRecords: { edges: [{ node: { sourcePayload: previous } }] },
+    });
+    mocks.jobs.mockImplementation(async (ids: string[]) =>
+      ids[0]?.startsWith('rd-scope-')
+        ? [{ jobId: ids[0], state: 'FAILED' }]
+        : [],
+    );
+    await new ImportCoordinator().control('sample');
+    expect(mocks.enqueue.mock.calls[0][0].jobs[0].jobId).toMatch(
+      /rd-scope-.*-1$/,
+    );
+    expect(
+      mocks.mutation.mock.calls.some(
+        ([request]) => request.updateRdSourceRecord,
+      ),
+    ).toBe(false);
+  });
   it('requires admin permission even for manually invoked functions', async () => {
     mocks.metadata.mockRejectedValue(new Error('Forbidden'));
     await expect(new ImportCoordinator().control('start')).rejects.toThrow(
@@ -83,7 +168,6 @@ describe('ImportCoordinator', () => {
     await new ImportCoordinator().control('simulate');
     expect(JSON.stringify(mocks.enqueue.mock.calls)).not.toContain('SECRET');
     expect(JSON.stringify(mocks.mutation.mock.calls)).not.toContain('SECRET');
-    expect(mocks.set).toHaveBeenCalledWith('rd:simulation-pipelines', []);
   });
   it('uses identical queue IDs for simultaneous first commands', async () => {
     const existing = state();

@@ -13,6 +13,7 @@ import { sourceId } from 'src/utils/source-id.util';
 import { parseCredentials } from 'src/utils/parse-credentials.util';
 import { newRecentImport } from 'src/utils/new-recent-import.util';
 import type { ImportAction } from 'src/types/import-action';
+import type { ImportTransition } from 'src/types/import-transition';
 
 /** All worker executions share a retained queue ID per checkpoint. Only the worker writes progress. */
 export class ImportCoordinator {
@@ -96,6 +97,7 @@ export class ImportCoordinator {
     if (active.job && !['COMPLETED', 'FAILED'].includes(active.job.state))
       return state;
     const previous = state;
+    let transitionId: string | undefined;
     if (action === 'simulate' && (!state || state.dryRun))
       state = newRecentImport(credentials, state, 'sample', true);
     else if (action === 'sample') {
@@ -131,30 +133,56 @@ export class ImportCoordinator {
       };
     }
     if (state && previous && state !== previous) {
-      // Keep the previous checkpoint for audit before an explicit scope change.
-      const backupKey = `checkpoint-backup:${previous.id}:${previous.revision}`;
-      const backup = await this.client.query({
-        rdSourceRecords: {
-          __args: { first: 1, filter: { id: { eq: sourceId(backupKey) } } },
-          edges: { node: { id: true } },
-        },
-      });
-      if (!backup.rdSourceRecords!.edges.length)
+      // One atomic claim per source checkpoint. Competing scope commands share
+      // the winning proposal and queue ID; only that queued worker changes progress.
+      const transitionKey = `scope-transition:${previous.id}:${previous.revision}`;
+      transitionId = sourceId(transitionKey);
+      let transition: ImportTransition = { action, previous, next: state };
+      try {
         await this.client.mutation({
           createRdSourceRecord: {
             __args: {
               data: {
-                id: sourceId(backupKey),
-                sourceKey: backupKey,
-                recordKind: 'checkpointBackup',
-                name: 'Migration checkpoint before scope change',
-                sourcePayload: previous,
+                id: transitionId,
+                sourceKey: transitionKey,
+                recordKind: 'scopeTransition',
+                name: 'Migration scope transition and previous checkpoint',
+                sourcePayload: transition,
               },
             },
             id: true,
           },
         });
-      await this.save(state);
+      } catch (error) {
+        const found = await this.client.query({
+          rdSourceRecords: {
+            __args: { first: 1, filter: { id: { eq: transitionId } } },
+            edges: { node: { sourcePayload: true } },
+          },
+        });
+        const retained = found.rdSourceRecords!.edges[0]?.node.sourcePayload as
+          ImportTransition | undefined;
+        if (
+          !retained ||
+          retained.previous?.id !== previous.id ||
+          retained.previous.revision !== previous.revision ||
+          retained.next?.accountKey !== previous.accountKey
+        )
+          throw error;
+        transition = retained;
+      }
+      action = transition.action;
+      state = transition.next;
+      // A worker may already have initialized or advanced the winning proposal.
+      const current = await this.read();
+      if (
+        current &&
+        (current.id !== previous.id || current.revision !== previous.revision)
+      ) {
+        if (current.id !== state.id) return current;
+        state = current;
+        transitionId = undefined;
+      }
     }
     const needsControlRecord = !previous;
     if (needsControlRecord) {
@@ -216,12 +244,28 @@ export class ImportCoordinator {
       return state;
     if (action === 'simulate' && !state.dryRun)
       throw new Error('A live migration already exists. Resume it instead.');
-    await kv.set('rd:pause', false);
-    if (action === 'simulate' && state !== previous)
-      await kv.set('rd:simulation-pipelines', []);
     // Duplicate clicks use the same resume ID. A completed/failed queue item is never silently re-enqueued.
     const token = `${state.id}-${state.revision}-${job?.jobId ?? 'initial'}-${job?.attemptsMade ?? 0}`;
-    const jobId = `rd-command-${sourceId(token)}`;
+    let jobId = `rd-command-${sourceId(token)}`;
+    if (transitionId) {
+      // Fixed slots do not depend on the mutable command pointer. Two callers
+      // racing before enqueue therefore still choose exactly the same queue ID.
+      const candidates = Array.from(
+        { length: 4 },
+        (_, index) => `rd-scope-${transitionId}-${index}`,
+      );
+      const attempts = await getJobs(candidates);
+      const available = candidates.find(
+        (id) => !attempts.some((attempt) => attempt.jobId === id),
+      );
+      if (attempts.some((attempt) => attempt.state !== 'FAILED')) return state;
+      if (!available)
+        throw new Error(
+          'RD_SCOPE_RETRY_LIMIT: the scope change could not be initialized after four attempts. The previous checkpoint was preserved.',
+        );
+      jobId = available;
+    }
+    await kv.set('rd:pause', false);
     await kv.set('rd:command-job', jobId);
     await enqueueJobs({
       logicFunctionUniversalIdentifier: IMPORT_WORKER,
@@ -233,6 +277,7 @@ export class ImportCoordinator {
               action === 'start' && !state.selection ? 'live' : 'continue',
             jobId,
             runId: state.id,
+            ...(transitionId ? { transitionId } : {}),
           },
         },
       ],

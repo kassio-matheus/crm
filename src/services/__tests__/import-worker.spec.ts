@@ -4,6 +4,7 @@ import type { ImportCoordinator } from '../import-coordinator';
 import type { RecordImporter } from '../record-importer';
 import type { ImportState } from 'src/types/import-state';
 import type { CoreApiClient } from 'twenty-client-sdk/core';
+import { sourceId } from 'src/utils/source-id.util';
 const mocks = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), set: vi.fn() }));
 vi.mock('src/rd-client/rd-client', () => ({
   RdClient: class {
@@ -297,6 +298,55 @@ describe('recent sample and complete date windows', () => {
   it('discards an old command after the user changes import scope', async () => {
     const { worker } = setup(recent());
     await worker.run({ runId: 'old-migration' });
+    expect(mocks.list).not.toHaveBeenCalled();
+  });
+  it('initializes a winning scope proposal in the queued worker and never resets its advanced checkpoint', async () => {
+    credentials();
+    const previous = {
+      ...initial(),
+      status: 'COMPLETED' as const,
+      version: 'v2' as const,
+    };
+    const next = {
+      ...recent(),
+      id: 'winning-run',
+      revision: previous.revision + 1,
+      plan: ['users'],
+    };
+    const transitionId = sourceId(
+      `scope-transition:${previous.id}:${previous.revision}`,
+    );
+    const query = vi
+      .fn()
+      .mockResolvedValue({
+        rdSourceRecords: {
+          edges: [
+            { node: { sourcePayload: { previous, next, action: 'simulate' } } },
+          ],
+        },
+      });
+    const save = vi.fn();
+    const enqueueNext = vi.fn();
+    const read = vi.fn().mockResolvedValue(previous);
+    const worker = new ImportWorker(
+      { read, save, enqueueNext } as unknown as ImportCoordinator,
+      { import: vi.fn() } as unknown as RecordImporter,
+      { query } as unknown as CoreApiClient,
+    );
+    mocks.list.mockResolvedValue({ records: [], hasMore: false, next: null });
+    await worker.run({ transitionId, runId: 'winning-run' });
+    expect(save.mock.calls[0][0].id).toBe('winning-run');
+    expect(mocks.set).toHaveBeenCalledWith('rd:simulation-pipelines', []);
+    read.mockResolvedValue({
+      ...next,
+      status: 'COMPLETED',
+      phase: 'done',
+      revision: next.revision + 10,
+    });
+    save.mockClear();
+    mocks.list.mockClear();
+    await worker.run({ transitionId, runId: 'winning-run' });
+    expect(save).not.toHaveBeenCalled();
     expect(mocks.list).not.toHaveBeenCalled();
   });
 });

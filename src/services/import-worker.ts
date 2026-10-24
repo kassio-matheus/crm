@@ -12,6 +12,7 @@ import { advanceSourceWindow } from 'src/utils/advance-source-window.util';
 import { PacedRdReader } from 'src/services/paced-rd-reader';
 import { ImportDependencies } from 'src/services/import-dependencies';
 import { ImportPreviewLedger } from 'src/services/import-preview-ledger';
+import type { ImportTransition } from 'src/types/import-transition';
 import type { ImportState } from 'src/types/import-state';
 
 export class ImportWorker {
@@ -26,8 +27,39 @@ export class ImportWorker {
     command?: 'live' | 'continue';
     jobId?: string;
     runId?: string;
+    transitionId?: string;
   }): Promise<void> {
-    const state = await this.coordinator.read();
+    let state = await this.coordinator.read();
+    if (payload.transitionId) {
+      const result = await this.core.query({
+        rdSourceRecords: {
+          __args: { first: 1, filter: { id: { eq: payload.transitionId } } },
+          edges: { node: { sourcePayload: true } },
+        },
+      });
+      const transition = result.rdSourceRecords!.edges[0]?.node
+        .sourcePayload as ImportTransition | undefined;
+      if (
+        !transition ||
+        !state ||
+        payload.runId !== transition.next?.id ||
+        transition.previous?.accountKey !== state.accountKey ||
+        transition.next.accountKey !== state.accountKey ||
+        transition.next.version !== state.version ||
+        payload.transitionId !==
+          sourceId(
+            `scope-transition:${transition.previous.id}:${transition.previous.revision}`,
+          )
+      )
+        throw new Error('RD_INVALID_SCOPE_TRANSITION');
+      if (
+        state.id === transition.previous.id &&
+        state.revision === transition.previous.revision
+      ) {
+        state = transition.next;
+        await this.coordinator.save(state);
+      } else if (state.id !== transition.next.id) return;
+    }
     if (
       !state ||
       (payload.runId !== undefined && payload.runId !== state.id) ||
@@ -67,6 +99,15 @@ export class ImportWorker {
     state.status = 'RUNNING';
     state.error = null;
     try {
+      if (
+        state.selection?.scope === 'sample' &&
+        state.dryRun &&
+        state.phase === 'resources' &&
+        state.resourceIndex === 0 &&
+        state.page === 1 &&
+        state.processed === 0
+      )
+        await kv.set('rd:simulation-pipelines', []);
       if (state.maintenance && state.preview) {
         const ledger = new ImportPreviewLedger(
           state.preview.runId,

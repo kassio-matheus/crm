@@ -25,6 +25,8 @@ export class ImportMonitor {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private commandAt = 0;
   private commandRevision = -1;
+  private commandRunId = '';
+  private commandDryRun: boolean | undefined;
   private samples: {
     at: number;
     processed: number;
@@ -113,14 +115,33 @@ export class ImportMonitor {
         this.snapshot.requestsPerMinute = measuring
           ? Math.max(0, ((state.requests - first.requests) * 60_000) / elapsed)
           : null;
-        const advanced = state.revision !== this.commandRevision;
+        const advanced =
+          state.revision !== this.commandRevision ||
+          state.id !== this.commandRunId ||
+          state.dryRun !== this.commandDryRun;
         const confirmed =
           pending === 'pause'
             ? ['PAUSED', 'COMPLETED', 'FAILED'].includes(state.status)
             : pending === 'start'
-              ? !state.dryRun
-              : ['RUNNING', 'READY', 'COMPLETED'].includes(state.status) ||
-                (advanced && state.status === 'FAILED');
+              ? advanced &&
+                !state.dryRun &&
+                (!state.selection || state.selection.scope === 'all')
+              : pending === 'sample'
+                ? advanced &&
+                  !state.dryRun &&
+                  state.selection?.scope === 'sample'
+                : pending === 'simulate'
+                  ? advanced && state.dryRun
+                  : pending === 'cleanup'
+                    ? advanced &&
+                      Boolean(
+                        state.preview &&
+                        ['CLEANING', 'REMOVED'].includes(state.preview.status),
+                      )
+                    : ['RUNNING', 'READY', 'COMPLETED'].includes(
+                        state.status,
+                      ) ||
+                      (advanced && state.status === 'FAILED');
         if (pending && confirmed) this.snapshot.pendingAction = null;
       }
       if (
@@ -195,6 +216,8 @@ export class ImportMonitor {
     this.snapshot.error = '';
     this.commandAt = this.now();
     this.commandRevision = state?.revision ?? -1;
+    this.commandRunId = state?.id ?? '';
+    this.commandDryRun = state?.dryRun;
     this.emit();
     try {
       const next = await this.execute(action);

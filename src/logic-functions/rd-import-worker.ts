@@ -13,5 +13,6 @@ export default defineLogicFunction({
     command?: 'live' | 'continue';
     jobId?: string;
     runId?: string;
+    transitionId?: string;
   }) => new ImportWorker().run(payload),
 });

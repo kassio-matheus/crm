@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { RestApiClient } from 'twenty-client-sdk/rest';
 import { MetadataApiClient } from 'twenty-client-sdk/metadata';
 import { kv } from 'twenty-sdk/logic-function';
 import { APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
@@ -34,6 +35,14 @@ export class RdOAuthService {
     private callbackUrl = rdCallbackUrl(),
     private now = Date.now,
     private random = () => randomBytes(32).toString('hex'),
+    private readLatestFingerprint = async (): Promise<string> => {
+      const result = await new RestApiClient({ runAs: 'application' }).post<{
+        fingerprint: string;
+      }>('/s/rd-oauth', { action: 'fingerprint' });
+      if (!/^[a-f0-9]{64}$/.test(result?.fingerprint ?? ''))
+        throw new Error('RD_OAUTH_CONFIG_CHECK_FAILED');
+      return result.fingerprint;
+    },
   ) {}
 
   private async authorize() {
@@ -108,17 +117,22 @@ export class RdOAuthService {
     return { authorizationUrl: url.href, callbackUrl: this.callbackUrl };
   }
 
-  private async latestConfig() {
-    const result = await this.metadata.query({
-      findOneApplication: {
-        __args: { universalIdentifier: APPLICATION_UNIVERSAL_IDENTIFIER },
-        applicationVariables: { key: true, value: true },
-      },
-    });
-    const raw = result.findOneApplication.applicationVariables.find(
-      (variable) => variable.key === 'RD_CREDENTIALS',
-    )?.value;
-    return parseRdOAuthConfig(typeof raw === 'string' ? raw : undefined);
+  async configurationFingerprint(): Promise<{ fingerprint: string }> {
+    await this.authorize();
+    // A fresh invocation receives current decrypted server configuration. Never return it.
+    return { fingerprint: fingerprint(parseRdOAuthConfig(this.readConfig())) };
+  }
+
+  private async unchangedConfig(expected: string) {
+    // GraphQL variable values are deliberately masked, even for the app itself.
+    // Secrets must come from the server-injected snapshot, never display metadata.
+    const config = parseRdOAuthConfig(this.readConfig());
+    if (
+      fingerprint(config) !== expected ||
+      (await this.readLatestFingerprint()) !== expected
+    )
+      throw new Error('RD_OAUTH_CONFIG_CHANGED');
+    return config;
   }
 
   async complete(query: Record<string, string | undefined>): Promise<string> {
@@ -135,9 +149,7 @@ export class RdOAuthService {
       !/^\/page\/[0-9a-f-]{36}$/.test(pending.returnPath)
     )
       throw new Error('RD_OAUTH_INVALID_STATE');
-    const config = await this.latestConfig();
-    if (pending.fingerprint !== fingerprint(config))
-      throw new Error('RD_OAUTH_CONFIG_CHANGED');
+    const config = await this.unchangedConfig(pending.fingerprint);
     // DELETE's boolean result is an atomic claim: concurrent callbacks cannot both exchange a code.
     if (!(await this.store.delete(key)))
       throw new Error('RD_OAUTH_INVALID_STATE');
@@ -154,7 +166,7 @@ export class RdOAuthService {
       query.code,
       pending.callbackUrl,
     );
-    const latest = await this.latestConfig();
+    const latest = await this.unchangedConfig(pending.fingerprint);
     if (
       (await this.store.get(activeKey)) !== key ||
       fingerprint(latest) !== pending.fingerprint

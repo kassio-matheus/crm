@@ -1,6 +1,7 @@
 import type { RdCredentials } from 'src/types/rd-credentials';
 import { rdFetch } from 'src/rd-client/rd-fetch';
 import { RdOAuthClient } from 'src/rd-client/rd-oauth-client';
+import { rdPaginationUrl } from 'src/utils/rd-pagination-url.util';
 
 /** One request per worker run, including retries and OAuth refreshes. Never log URLs or response bodies. */
 export class RdClient {
@@ -21,24 +22,7 @@ export class RdClient {
     hasMore: boolean;
   }> {
     const version = this.credentials.version;
-    const origin =
-      version === 'v1'
-        ? 'https://crm.rdstation.com'
-        : 'https://api.rd.services';
-    const basePath = version === 'v1' ? '/api/v1/' : '/crm/v2/';
-    const url = new URL(
-      nextPath ?? `${basePath}${path}`,
-      `${origin}${basePath}${path}`,
-    );
-    // Reject hostile next-page links rather than forwarding a token to an arbitrary host.
-    if (
-      url.origin !== origin ||
-      !url.pathname.startsWith(basePath) ||
-      url.username ||
-      url.password ||
-      url.hash
-    )
-      throw new Error('Unsafe pagination URL returned by RD Station.');
+    const url = rdPaginationUrl(version, path, nextPath);
     if (!nextPath && !single) {
       url.searchParams.set(
         version === 'v1' ? 'page' : 'page[number]',
@@ -66,6 +50,7 @@ export class RdClient {
     }
     if (version === 'v1')
       url.searchParams.set('token', this.credentials.accessToken);
+    url.searchParams.sort();
     let response: Response;
     try {
       response = await rdFetch(
@@ -128,8 +113,10 @@ export class RdClient {
       throw new Error(`Unexpected RD list response for ${kind}.`);
     const links = object.links as { next?: unknown } | undefined;
     const next =
-      typeof links?.next === 'string' && links.next ? links.next : null;
-    if (next && new URL(next, url).href === url.href)
+      typeof links?.next === 'string' && links.next
+        ? rdPaginationUrl(version, path, links.next).href
+        : null;
+    if (next && next === url.href)
       throw new Error('RD returned a repeated pagination cursor.');
     if (version === 'v1' && page * 25 >= 10_000 && records.length === 25)
       throw new Error(

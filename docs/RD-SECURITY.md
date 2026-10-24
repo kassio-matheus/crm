@@ -58,3 +58,19 @@ Os testes de OAuth usam respostas simuladas, incluindo expiração, replay conco
 - Status autenticado e navegador confirmaram a URL pública correta, sem credenciais salvas e sem conexão RD iniciada.
 
 Os recibos operacionais ficam em `.twenty/`, ignorado pelo Git. A troca real de tokens e a importação não fazem parte desta validação.
+
+## Correção do callback OAuth — 23/10/2026
+
+O Twenty retorna valores secretos mascarados em `applicationVariables.value`, inclusive para o próprio aplicativo. O callback usa a configuração injetada no servidor e não tenta interpretar esse valor de exibição. Uma chamada interna autenticada consulta somente o SHA-256 da configuração em uma nova execução antes e depois da troca de tokens, para detectar alterações enquanto a execução original mantém seu snapshot. Essa chamada fica no próprio Twenty; não é uma chamada adicional ao RD. O fingerprint exige permissão APPLICATIONS e não retorna credenciais.
+
+Os testes reproduzem metadados mascarados e configuração alterada em uma nova execução, preservando os testes de uso único, expiração e replay concorrente. Os logs do callback contêm somente códigos estáticos permitidos; códigos de autorização, estados, tokens e mensagens externas não entram nesses logs.
+
+A correção passou em typecheck, lint e 56 testes focados em OAuth/segurança HTTP. A sincronização em produção atualizou duas funções, sem exclusões. Após o administrador concluir pessoalmente o consentimento no RD, o callback retornou à página limpa do CRM e a tela confirmou “RD Station conectado”. A troca real de código por tokens foi validada com a configuração já salva. Nenhuma simulação ou importação foi iniciada; consultas de negócio e renovação real de tokens não foram exercitadas nessa verificação.
+
+## Paginação V2 — 23/10/2026
+
+Uma resposta real de organizações devolveu a próxima página sob `https://api.rd.services/api/v2/organizations`, enquanto a base documentada é `https://api.rd.services/crm/v2/`. Esse checkpoint era bloqueado antes da requisição seguinte. O cliente agora normaliza apenas o prefixo V2 nesse domínio HTTPS exato e exige que o caminho continue sendo o mesmo recurso originalmente solicitado. Host alternativo, HTTP, porta alternativa, usuário/senha na URL, fragmento e troca de recurso continuam bloqueados. A URL é validada também antes de salvar o próximo checkpoint; parâmetros são preservados e canonizados para detectar cursores repetidos.
+
+A correção passou em typecheck, lint e 71 testes focados no cliente RD, política de transporte, paginação e worker. A retomada mantém a simulação (`dryRun`) e seus contadores, sem iniciar uma importação real.
+
+Em produção, a sincronização atualizou apenas o worker, com zero exclusões. A simulação foi retomada do checkpoint existente e avançou da página 2 para a 13 de organizações: 364 registros verificados, 22 requisições, `dryRun: true`, `created: 0`, sem erro nesse ponto. A simulação continuava em andamento; esse resultado confirma a recuperação da paginação, não a conclusão da validação de toda a conta.

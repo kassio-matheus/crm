@@ -131,3 +131,27 @@ describe('ImportCoordinator', () => {
     );
   });
 });
+
+it('returns only safe live queue facts and pending pause without foreign failure messages', async () => {
+  const existing = { ...state(), status: 'RUNNING' as const, jobId: 'active' };
+  mocks.query.mockResolvedValue({
+    rdSourceRecords: { edges: [{ node: { sourcePayload: existing } }] },
+  });
+  mocks.get.mockImplementation(async (key) =>
+    key === 'rd:pause' ? true : null,
+  );
+  mocks.jobs.mockResolvedValue([
+    {
+      jobId: 'active',
+      state: 'ACTIVE',
+      attemptsMade: 2,
+      failedReason: 'SECRET',
+      enqueuedAt: 1,
+    },
+  ]);
+  const result = await new ImportCoordinator().control('status');
+  expect(result?.queue).toEqual({ state: 'ACTIVE', attemptsMade: 2 });
+  expect(result?.pauseRequested).toBe(true);
+  expect(JSON.stringify(result)).not.toContain('SECRET');
+  expect(mocks.mutation).not.toHaveBeenCalled();
+});

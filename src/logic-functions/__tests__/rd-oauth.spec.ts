@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const methods = vi.hoisted(() => ({ status: vi.fn(), start: vi.fn() }));
+const methods = vi.hoisted(() => ({ status: vi.fn(), start: vi.fn(), configurationFingerprint: vi.fn() }));
 vi.mock('src/services/rd-oauth-service', () => ({
   RdOAuthService: class {
     status = methods.status;
     start = methods.start;
+    configurationFingerprint = methods.configurationFingerprint;
   },
 }));
 import definition from '../rd-oauth';
@@ -26,6 +27,11 @@ describe('authenticated RD OAuth control', () => {
     await expect(
       definition.config.handler({ action: 'import' }, context),
     ).rejects.toThrow('Invalid OAuth action');
+    expect(methods.start).not.toHaveBeenCalled();
+  });
+  it('dispatches the protected internal snapshot without starting OAuth', async () => {
+    await definition.config.handler({ body: { action: 'fingerprint' } }, context);
+    expect(methods.configurationFingerprint).toHaveBeenCalledTimes(1);
     expect(methods.start).not.toHaveBeenCalled();
   });
   it('only prepares authorization on an explicit start', async () => {

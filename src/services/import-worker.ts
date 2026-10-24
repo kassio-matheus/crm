@@ -6,6 +6,8 @@ import { RecordImporter } from 'src/services/record-importer';
 import { RdClient } from 'src/rd-client/rd-client';
 import { sourceId } from 'src/utils/source-id.util';
 import { parseCredentials } from 'src/utils/parse-credentials.util';
+import { rdImportResources } from 'src/utils/rd-import-resources.util';
+import { appendImportActivity } from 'src/utils/append-import-activity.util';
 import type { ImportState } from 'src/types/import-state';
 
 export class ImportWorker {
@@ -29,6 +31,7 @@ export class ImportWorker {
     if (payload.jobId) state.jobId = payload.jobId;
     if (await kv.get<boolean>('rd:pause')) {
       state.status = 'PAUSED';
+      appendImportActivity(state, 'paused');
       await this.coordinator.save(state);
       return;
     }
@@ -54,6 +57,7 @@ export class ImportWorker {
       });
     }
     if (state.phase === 'done') return;
+    if (payload.command) appendImportActivity(state, 'resumed');
     state.status = 'RUNNING';
     state.error = null;
     try {
@@ -74,6 +78,7 @@ export class ImportWorker {
       if (!work) {
         state.phase = 'done';
         state.status = 'COMPLETED';
+        appendImportActivity(state, 'completed');
         await this.coordinator.save(state);
         return;
       }
@@ -98,12 +103,16 @@ export class ImportWorker {
             async () => {},
           )
         : rd;
+      const requestStartedAt = Date.now();
+      state.lastRequestAt = new Date(requestStartedAt).toISOString();
       const page = await source.list(
         work.path,
         state.page,
         state.nextPath,
         work.single,
       );
+      state.lastRequestDurationMs = Math.max(0, Date.now() - requestStartedAt);
+      state.lastBatchSize = page.records.length;
       state.retryCount = 0;
       const signature = sourceId(
         JSON.stringify(
@@ -150,6 +159,11 @@ export class ImportWorker {
           ]),
         ]);
       }
+      appendImportActivity(state, 'page', {
+        kind: work.kind,
+        batchSize: page.records.length,
+        durationMs: state.lastRequestDurationMs,
+      });
       state.recordOffset = 0;
       state.pageSignature = null;
       if (page.hasMore) {
@@ -180,6 +194,11 @@ export class ImportWorker {
         // Bounded automatic retry: the same source page is retained, never advanced on an error.
         const attempts = ++state.retryCount;
         if (attempts <= 3) {
+          appendImportActivity(state, 'retry', {
+            retryAfterMs: message.startsWith('RD_RETRY:')
+              ? Number(message.slice(9))
+              : 60_000,
+          });
           await this.coordinator.enqueueNext(
             state,
             message.startsWith('RD_RETRY:') ? Number(message.slice(9)) : 60_000,
@@ -188,6 +207,7 @@ export class ImportWorker {
         }
       }
       state.status = 'FAILED';
+      appendImportActivity(state, 'failed');
       state.revision += 1;
       // Do not return foreign response bodies, request URLs, stack traces, or credentials to the UI/logs.
       state.error =
@@ -209,40 +229,7 @@ export class ImportWorker {
     legacy?: boolean;
     single?: boolean;
   } | null> {
-    const resources =
-      state.version === 'v1'
-        ? [
-            'deal_pipelines',
-            'users',
-            'teams',
-            'organizations',
-            'contacts',
-            'products',
-            'campaigns',
-            'deal_sources',
-            'deal_lost_reasons',
-            'custom_fields',
-            'deals',
-            'tasks?done=false',
-            'tasks?done=true',
-          ]
-        : [
-            'pipelines',
-            'users',
-            'teams',
-            'organizations',
-            'contacts',
-            'campaigns',
-            'sources',
-            'products',
-            'lost_reasons',
-            'custom_fields',
-            'segments',
-            'deals',
-            'tasks',
-            'meetings',
-            'users/meeting_availability',
-          ];
+    const resources = rdImportResources(state.version);
     if (state.phase === 'resources') {
       if (state.resourceIndex >= resources.length) {
         state.phase = 'dealDetails';

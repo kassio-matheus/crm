@@ -55,6 +55,13 @@ export class ImportCoordinator {
     if (action === 'status') {
       if (state && ['READY', 'RUNNING'].includes(state.status)) {
         const latest = await this.latestJob(state);
+        state = {
+          ...state,
+          pauseRequested: Boolean(await kv.get('rd:pause')),
+          queue: latest.job
+            ? { state: latest.job.state, attemptsMade: latest.job.attemptsMade }
+            : undefined,
+        };
         if (
           latest.known &&
           (!latest.job || ['FAILED', 'COMPLETED'].includes(latest.job.state))

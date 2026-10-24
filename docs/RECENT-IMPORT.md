@@ -37,3 +37,14 @@ Os registros são removidos em ordem de dependência: anexos/vínculos, tarefas/
 ## Validação
 
 Os testes cobrem os filtros decrescentes e sua preservação nos cursores, mais de 10.000 registros sintéticos com empates, datas inválidas, timestamps densos, referências por ID, amostra congelada, retomada parcial, propriedade persistida antes da criação, exclusão bloqueada por vínculos externos, soft delete/restauração e promoção da amostra para o fluxo completo. Os testes contra banco usam somente localhost:2021 e fixtures isoladas, sem chamadas reais ao RD.
+
+Revisão de 24/10/2026:
+
+- 325 testes unitários passaram; o teste direcionado de controle foi repetido após limpar a descoberta de funis em novas simulações. Typecheck e lint passaram sem erros ou avisos de lint.
+- 14 testes de integração existentes e um novo cenário de propriedade, bloqueio por vínculo externo, exclusão e restauração passaram contra o servidor isolado Twenty 2.51.0. A produção continua no Twenty 2.50.1; não houve atualização do servidor de produção.
+- A simulação real recente concluiu com 25 negociações, 25 contatos relacionados e cinco empresas relacionadas, além dos catálogos. Zero registros operacionais foram criados nessa etapa.
+- A criação real da mesma amostra concluiu sem erro: 25 negociações, 25 contatos, cinco empresas, seis funis e 32 etapas. São 93 registros operacionais rastreados para remoção. As consultas de tarefas dessas negociações retornaram vazias.
+- As 25 negociações têm contato principal, funil e etapa. O Kanban nativo de um dos funis mostrou suas cinco colunas, incluindo as vazias, e os cartões importados.
+- O diálogo de exclusão foi aberto e cancelado em produção, preservando a amostra para revisão. Exclusão e restauração efetivas foram exercitadas somente com fixtures no banco isolado.
+- A importação completa não foi iniciada. O avanço além de 10.000 foi exercitado com dados sintéticos; a conta inteira ainda depende da ação explícita do administrador e de sua reconciliação.
+- A sincronização inicial teve zero criações/exclusões de metadados e 13 atualizações: controles/worker, UI e as permissões necessárias de soft delete. O ajuste final teve três atualizações, também sem exclusões. Nenhuma alteração foi feita no RD.

@@ -173,6 +173,31 @@ export const ImportOverview = ({
             Na importação completa, a amostra é reaproveitada sem duplicações.
           </p>
         )}
+        {state?.status === 'COMPLETED' && (state.dryRun || sample) && (
+          <>
+            <label className="ri-confirm">
+              <Checkbox
+                checked={acknowledged}
+                onCheckedChange={(value) => setAcknowledged(Boolean(value))}
+                className="ri-checkbox"
+                aria-label="Conferi o backup e autorizo criar os dados no Twenty"
+              />{' '}
+              <span>
+                Conferi o backup e o teste com a amostra. Entendo que os dados
+                antigos ainda não foram verificados e quero importar toda a base
+                disponível pela API.
+              </span>
+            </label>
+            <ImportButton
+              emphasis
+              startIcon={<IconDownload size={15} />}
+              disabled={!acknowledged || !connected || pending}
+              onClick={() => onAction('start')}
+            >
+              Importar tudo de vez
+            </ImportButton>
+          </>
+        )}
       </section>
       <div className="ri-metrics">
         {metrics.map(({ title, value, note, Icon }) => (
@@ -542,33 +567,6 @@ export const ImportOverview = ({
                   {connected ? 'Simular os dados' : 'Configurar conexão'}
                 </ImportButton>
               ) : null}
-              {state?.status === 'COMPLETED' && (state.dryRun || sample) && (
-                <>
-                  <label className="ri-confirm">
-                    <Checkbox
-                      checked={acknowledged}
-                      onCheckedChange={(value) =>
-                        setAcknowledged(Boolean(value))
-                      }
-                      className="ri-checkbox"
-                      aria-label="Conferi o backup e autorizo criar os dados no Twenty"
-                    />{' '}
-                    <span>
-                      Conferi o backup e o teste com a amostra. Entendo que os
-                      dados antigos ainda não foram verificados e quero importar
-                      toda a base disponível pela API.
-                    </span>
-                  </label>
-                  <ImportButton
-                    emphasis
-                    startIcon={<IconDownload size={15} />}
-                    disabled={!acknowledged || !connected || pending}
-                    onClick={() => onAction('start')}
-                  >
-                    Importar tudo de vez
-                  </ImportButton>
-                </>
-              )}
               <ImportButton
                 onClick={onRecords}
                 endIcon={<IconArrowRight size={14} />}

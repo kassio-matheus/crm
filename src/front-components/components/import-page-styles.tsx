@@ -13,10 +13,11 @@ export const ImportPageStyles = ({ children }: { children: ReactNode }) => {
           '--ri-text': t.font.color.primary,
           '--ri-muted': t.font.color.secondary,
           '--ri-line': t.border.color.light,
-          '--ri-accent': t.accent.primary,
-          '--ri-green': t.color.green,
-          '--ri-amber': t.color.orange,
-          '--ri-red': t.color.red,
+          '--ri-accent': t.accent.accent9,
+          '--ri-accent-text': t.accent.accent11,
+          '--ri-green': t.color.green11,
+          '--ri-amber': t.color.orange11,
+          '--ri-red': t.color.red11,
         } as CSSProperties
       }
     >
@@ -193,6 +194,14 @@ export const ImportPageStyles = ({ children }: { children: ReactNode }) => {
     opacity 0.15s;
   text-decoration: none;
 }
+.rd-import-dashboard .ri-button > span,
+.rd-import-dashboard .ri-tab > span,
+.rd-import-dashboard .ri-tag > span > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
 .rd-import-dashboard .ri-button:hover:not(:disabled) {
   background: var(--ri-soft);
 }
@@ -245,7 +254,7 @@ export const ImportPageStyles = ({ children }: { children: ReactNode }) => {
   border-color: color-mix(in srgb, var(--ri-red) 25%, transparent);
 }
 .rd-import-dashboard .ri-tag-accent {
-  color: var(--ri-accent);
+  color: var(--ri-accent-text);
   background: color-mix(in srgb, var(--ri-accent) 8%, var(--ri-bg));
   border-color: color-mix(in srgb, var(--ri-accent) 25%, transparent);
 }

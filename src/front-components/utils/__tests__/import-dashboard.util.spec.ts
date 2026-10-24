@@ -59,3 +59,13 @@ it('has a useful empty state and supports the v1 resource order', () => {
     ).current,
   ).toBe('Negociações');
 });
+
+it('does not attribute aggregate v1 task counts to pending or completed subsets', () => {
+  const model = importDashboard(
+    importState({ version: 'v1', counts: { tasks: 20 }, resourceIndex: 12 }),
+    Date.now(),
+  );
+  expect(
+    model.rows.filter((row) => row.kind === 'tasks').map((row) => row.count),
+  ).toEqual([null, null]);
+});

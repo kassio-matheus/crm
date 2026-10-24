@@ -113,7 +113,9 @@ export const ImportResourceTable = ({
                   </div>
                 </td>
                 <td className="ri-count">
-                  {row.count.toLocaleString('pt-BR')}
+                  {row.count === null
+                    ? 'agrupado'
+                    : row.count.toLocaleString('pt-BR')}
                 </td>
                 <td>
                   <Tag
@@ -162,7 +164,9 @@ export const ImportResourceTable = ({
       )}
       <p className="ri-fine-print" style={{ marginTop: 14 }}>
         Os totais são acumulados por tipo de dado. Etapas vazias também são
-        consideradas lidas. O RD não informa um total global de registros.
+        consideradas lidas. O RD não informa um total global de registros.{' '}
+        {state?.version === 'v1' &&
+          ` Tarefas v1: ${(state.counts.tasks ?? 0).toLocaleString('pt-BR')} no total, somando pendentes e concluídas.`}
       </p>
     </section>
   );

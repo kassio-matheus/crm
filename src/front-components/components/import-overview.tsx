@@ -17,6 +17,7 @@ import {
 } from 'twenty-ui/icon';
 import type { ImportMonitorSnapshot } from 'src/types/import-monitor-snapshot';
 import { importDashboard } from '../utils/import-dashboard.util';
+import { importDiagnostic } from '../utils/import-diagnostic.util';
 import { importDuration } from '../utils/import-duration.util';
 import { ImportButton } from './import-button';
 import { ImportStatusTag } from './import-status-tag';
@@ -43,6 +44,7 @@ export const ImportOverview = ({
   const [acknowledged, setAcknowledged] = useState(false);
   const state = monitor.state;
   const model = importDashboard(state, now);
+  const diagnostic = importDiagnostic(state);
   const running = state?.status === 'RUNNING' || state?.status === 'READY';
   const pending = Boolean(monitor.pendingAction);
   const number = (value: number | undefined) =>
@@ -78,7 +80,10 @@ export const ImportOverview = ({
     {
       title: 'Tempo decorrido',
       value: state ? importDuration(model.elapsedSeconds) : '—',
-      note: 'Desde o início, incluindo pausas',
+      note:
+        state && ['PAUSED', 'FAILED', 'COMPLETED'].includes(state.status)
+          ? 'Até o último checkpoint salvo'
+          : 'Desde o início, incluindo pausas',
       Icon: IconClock,
     },
   ];
@@ -254,7 +259,7 @@ export const ImportOverview = ({
                       Tentativas no checkpoint
                     </span>
                     <strong>
-                      {state.retryCount} de 3 retomadas automáticas
+                      {Math.min(state.retryCount, 3)} de 3 retomadas automáticas
                     </strong>
                   </div>
                 </div>
@@ -280,11 +285,9 @@ export const ImportOverview = ({
                   >
                     <IconAlertTriangle size={17} />
                     <div>
-                      <strong>Precisamos revisar esta etapa</strong>
-                      <p>
-                        O checkpoint foi mantido. Confira o detalhe abaixo antes
-                        de retomar.
-                      </p>
+                      <strong>{diagnostic?.title}</strong>
+                      <p>{diagnostic?.description}</p>
+                      <p style={{ marginTop: 8 }}>{diagnostic?.recovery}</p>
                       <details style={{ marginTop: 8 }}>
                         <summary>Ver detalhe do erro</summary>
                         <p style={{ overflowWrap: 'anywhere', marginTop: 8 }}>
@@ -375,12 +378,16 @@ export const ImportOverview = ({
               ) : state && ['PAUSED', 'FAILED'].includes(state.status) ? (
                 <ImportButton
                   emphasis
-                  disabled={pending || !connected}
+                  disabled={
+                    pending || !connected || diagnostic?.canResume === false
+                  }
                   loading={pending}
                   startIcon={<IconPlayerPlay size={15} />}
                   onClick={() => onAction('resume')}
                 >
-                  Retomar {state.dryRun ? 'simulação' : 'importação'}
+                  {diagnostic?.canResume === false
+                    ? 'Leitura precisa de ajuste'
+                    : `Retomar ${state.dryRun ? 'simulação' : 'importação'}`}
                 </ImportButton>
               ) : !state ? (
                 <ImportButton

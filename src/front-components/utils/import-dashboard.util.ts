@@ -23,7 +23,10 @@ export const importDashboard = (state: ImportState | null, now: number) => {
       key: path,
       kind,
       label: importResourceLabel(path),
-      count: state?.counts[kind] ?? 0,
+      count:
+        state?.version === 'v1' && kind === 'tasks'
+          ? null
+          : (state?.counts[kind] ?? 0),
       status: done ? 'done' : current ? 'current' : 'waiting',
     };
   });

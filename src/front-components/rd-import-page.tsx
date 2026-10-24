@@ -3,6 +3,7 @@ import { defineFrontComponent } from 'twenty-sdk/define';
 import { navigate, AppPath } from 'twenty-sdk/front-component';
 import { Tabs } from 'twenty-ui/primitives/navigation';
 import { Tag } from 'twenty-ui/primitives/data-display';
+import { Callout } from 'twenty-ui/components/feedback';
 import {
   IconRefresh,
   IconChartBar,
@@ -154,26 +155,29 @@ const ImportPage = () => {
         </ImportButton>
       </div>
       {(monitor.error || connectionError || actionError) && (
-        <div
+        <Callout
           className="ri-callout ri-callout-error"
+          status="error"
           role="alert"
           style={{ marginTop: 16 }}
-        >
-          <IconRefresh size={16} />
-          <div>
-            {monitor.error || connectionError || actionError}
-            {monitor.failures > 0 && (
-              <p className="ri-tiny">
-                Nova tentativa em até{' '}
-                {Math.max(
-                  0,
-                  Math.ceil(((monitor.nextPollAt ?? now) - now) / 1000),
-                )}
-                s. O processamento no servidor não é interrompido.
-              </p>
-            )}
-          </div>
-        </div>
+          title="Precisamos da sua atenção"
+          icon={<IconRefresh size={16} />}
+          description={
+            <>
+              {monitor.error || connectionError || actionError}
+              {monitor.failures > 0 && (
+                <p className="ri-tiny">
+                  Nova tentativa em até{' '}
+                  {Math.max(
+                    0,
+                    Math.ceil(((monitor.nextPollAt ?? now) - now) / 1000),
+                  )}
+                  s. O processamento no servidor não é interrompido.
+                </p>
+              )}
+            </>
+          }
+        />
       )}
       <Tabs.Root value={tab} onValueChange={(value) => setTab(String(value))}>
         <Tabs.List

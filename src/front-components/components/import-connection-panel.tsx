@@ -221,7 +221,8 @@ export const ImportConnectionPanel = ({
               <h3>Dados do aplicativo</h3>
               <p className="ri-fine-print">
                 Use um aplicativo do produto RD Station CRM. Salvar uma
-                configuração OAuth exige uma nova autorização.
+                configuração OAuth exige uma nova autorização. Reinforme os
+                tokens opcionais que deseja manter.
               </p>
             </div>
             <RadioGroup

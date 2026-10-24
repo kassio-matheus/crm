@@ -22,7 +22,7 @@ Os novos campos de telemetria são opcionais dentro do progresso JSON existente.
 
 ## Ações e proteção dos dados
 
-Abrir, atualizar ou navegar pelo painel **não** inicia nem retoma uma execução. Uma execução pausada permanece pausada. A importação real exige simulação concluída, confirmação de conferência do backup e confirmação no diálogo do Twenty. A API do RD continua restrita a GET para dados, com POST somente no endpoint fixo de tokens OAuth.
+Abrir, atualizar ou navegar pelo painel **não** inicia nem retoma uma execução. Uma execução pausada permanece pausada. O [fluxo recente](RECENT-IMPORT.md) separa a simulação de até 25 negociações, a criação dessa amostra, sua exclusão e a importação completa. Criar a amostra e importar tudo exigem ações distintas e confirmação no diálogo do Twenty. A amostra não valida os dados antigos. A API do RD continua restrita a GET para dados, com POST somente no endpoint fixo de tokens OAuth.
 
 A telemetria tem tamanho limitado e não recebe nomes de clientes, URLs, credenciais, conteúdo de registros nem mensagens externas de falha. A fila expõe somente estado e tentativas, sem o texto de erros do provedor.
 
@@ -34,8 +34,8 @@ A telemetria tem tamanho limitado e não recebe nomes de clientes, URLs, credenc
 - Revisão no navegador em 24/10/2026: abas, busca, filtros, navegação por teclado, configurações protegidas, atualização após recarregar, temas claro/escuro e largura compacta de 820 px sem transbordamento horizontal.
 - A atualização em produção preservou a simulação interrompida e seus contadores. Nenhuma importação real foi iniciada durante a revisão.
 
-## Limite atual para bases grandes
+## Leitura de bases grandes
 
 A [documentação da API v2](https://developers.rdstation.com/reference/crm-v2-introduction) limita as listagens de empresas, contatos e negociações aos primeiros 10.000 resultados por filtro. O painel reconhece a falha HTTP 400 na página além dessa janela quando o checkpoint já contabiliza 10.000 registros desse recurso, explica o limite e desabilita a retomada da mesma página. Outros erros continuam recebendo a orientação correspondente.
 
-Para ultrapassar essa janela, o importador ainda precisa implementar leituras divididas em filtros menores, com checkpoints e reconciliação próprios. Essa divisão não faz parte desta alteração de interface. O diagnóstico preserva o progresso e não considera a simulação concluída, nem inicia uma nova leitura automaticamente.
+O novo fluxo guarda seu plano de recursos no checkpoint e percorre empresas, contatos e negociações em ordem de criação decrescente. Antes de atingir a janela, reduz o limite superior do filtro para a data mais antiga da página concluída e reinicia a paginação com sobreposição inclusiva. A proteção contra duplicações preserva os registros repetidos nessa fronteira. Grupos de datas que não permitem avanço seguro interrompem a execução com um diagnóstico específico. Checkpoints antigos mantêm seus índices originais; a ação explícita de simular os recentes inicia o novo fluxo e guarda o checkpoint anterior para auditoria.

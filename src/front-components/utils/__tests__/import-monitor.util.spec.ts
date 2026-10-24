@@ -104,3 +104,32 @@ it('reports observed rates only after enough active samples and resets for count
   expect(snapshots[snapshots.length - 1]?.recordsPerMinute).toBeNull();
   monitor.stop();
 });
+it('allows full import from a completed native sample and rejects deleting a promoted sample', async () => {
+  const sample = importState({
+    status: 'COMPLETED',
+    dryRun: false,
+    selection: {
+      scope: 'sample',
+      limit: 25,
+      cutoff: '2026-10-24T00:00:00Z',
+      selectedDeals: ['one'],
+    },
+    preview: { runId: 'sample', status: 'AVAILABLE', owned: 3, removed: 0 },
+  });
+  execute.mockResolvedValue(sample);
+  const monitor = setup();
+  monitor.start();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(await monitor.command('start')).toBe(true);
+  monitor.stop();
+  execute.mockResolvedValue({
+    ...sample,
+    selection: { ...sample.selection, scope: 'all' },
+    preview: { ...sample.preview, status: 'PROMOTED' },
+  });
+  const full = setup();
+  full.start();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(await full.command('cleanup')).toBe(false);
+  full.stop();
+});

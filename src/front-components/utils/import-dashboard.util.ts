@@ -4,7 +4,7 @@ import { importResourceLabel } from './import-resource-label.util';
 
 /** Category progress is not a percentage of records: the provider supplies no account-wide total. */
 export const importDashboard = (state: ImportState | null, now: number) => {
-  const paths = rdImportResources(state?.version ?? 'v2');
+  const paths = state?.plan ?? rdImportResources(state?.version ?? 'v2');
   const complete = state?.status === 'COMPLETED';
   const resourceIndex = state?.resourceIndex ?? 0;
   const rows = paths.map((path, index) => {

@@ -18,6 +18,7 @@ import { executeImport } from './utils/execute-import.util';
 import { executeRdOAuth } from './utils/execute-rd-oauth.util';
 import { ImportMonitor } from './utils/import-monitor.util';
 import { confirmImportStart } from './utils/confirm-import-start.util';
+import { confirmSampleAction } from './utils/confirm-sample-action.util';
 import { importDuration } from './utils/import-duration.util';
 import { ImportPageStyles } from './components/import-page-styles';
 import { ImportButton } from './components/import-button';
@@ -66,6 +67,11 @@ const ImportPage = () => {
     setActionError('');
     try {
       if (name === 'start' && !(await confirmImportStart(monitor.state)))
+        return;
+      if (
+        (name === 'sample' || name === 'cleanup') &&
+        !(await confirmSampleAction(name, monitor.state))
+      )
         return;
       await service.current?.command(name);
     } catch {

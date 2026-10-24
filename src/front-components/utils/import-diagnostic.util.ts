@@ -3,9 +3,27 @@ import { rdImportResources } from 'src/utils/rd-import-resources.util';
 
 export const importDiagnostic = (state: ImportState | null) => {
   if (!state?.error) return null;
-  const resource = rdImportResources(state.version)[state.resourceIndex]?.split(
-    '?',
-  )[0];
+  const resource = (state.plan ?? rdImportResources(state.version))[
+    state.resourceIndex
+  ]?.split('?')[0];
+  if (state.error.startsWith('RD_DENSE_TIMESTAMP_LIMIT'))
+    return {
+      title: 'Muitos registros com a mesma data',
+      description:
+        'A API retornou mais registros com a mesma data de criação do que permite listar nesse filtro.',
+      recovery:
+        'O checkpoint foi preservado. Nenhum registro foi descartado; essa faixa precisa de uma estratégia adicional de divisão antes de continuar.',
+      canResume: false,
+    };
+  if (state.error.startsWith('RD_PREVIEW_IN_USE'))
+    return {
+      title: 'A amostra está sendo usada por outros registros',
+      description:
+        'Existem vínculos criados fora do teste que dependem destes dados.',
+      recovery:
+        'Revise os vínculos antes de excluir a amostra. Dados anteriores não foram incluídos na exclusão.',
+      canResume: true,
+    };
   if (
     state.version === 'v2' &&
     state.phase === 'resources' &&

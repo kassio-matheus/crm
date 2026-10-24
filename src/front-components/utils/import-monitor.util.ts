@@ -151,7 +151,27 @@ export class ImportMonitor {
   async command(action: Action): Promise<boolean> {
     if (!this.active || this.snapshot.pendingAction) return false;
     const state = this.snapshot.state;
-    if (action === 'start' && (!state?.dryRun || state.status !== 'COMPLETED'))
+    if (
+      action === 'start' &&
+      (!state ||
+        state.status !== 'COMPLETED' ||
+        (!state.dryRun && state.selection?.scope !== 'sample'))
+    )
+      return false;
+    if (
+      action === 'sample' &&
+      (!state?.dryRun ||
+        state.status !== 'COMPLETED' ||
+        state.selection?.scope !== 'sample')
+    )
+      return false;
+    if (
+      action === 'cleanup' &&
+      (!state?.preview ||
+        state.selection?.scope !== 'sample' ||
+        ['RUNNING', 'READY'].includes(state.status) ||
+        ['REMOVED', 'PROMOTED'].includes(state.preview.status))
+    )
       return false;
     if (
       action === 'resume' &&

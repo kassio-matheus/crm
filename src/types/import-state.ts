@@ -1,4 +1,6 @@
 import type { ImportActivity } from 'src/types/import-activity';
+import type { ImportSelection } from 'src/types/import-selection';
+import type { ImportPreview } from 'src/types/import-preview';
 export type ImportState = {
   id: string;
   accountKey: string;
@@ -32,4 +34,8 @@ export type ImportState = {
   lastBatchSize?: number;
   pauseRequested?: boolean;
   queue?: { state: string; attemptsMade: number };
+  plan?: string[];
+  selection?: ImportSelection;
+  preview?: ImportPreview;
+  maintenance?: 'cleanup' | 'restore';
 };

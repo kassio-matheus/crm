@@ -14,6 +14,7 @@ import {
   IconAlertTriangle,
   IconArrowRight,
   IconPlug,
+  IconTrash,
 } from 'twenty-ui/icon';
 import type { ImportMonitorSnapshot } from 'src/types/import-monitor-snapshot';
 import { importDashboard } from '../utils/import-dashboard.util';
@@ -47,6 +48,8 @@ export const ImportOverview = ({
   const diagnostic = importDiagnostic(state);
   const running = state?.status === 'RUNNING' || state?.status === 'READY';
   const pending = Boolean(monitor.pendingAction);
+  const sample = state?.selection?.scope === 'sample';
+  const full = state?.selection?.scope === 'all';
   const number = (value: number | undefined) =>
     (value ?? 0).toLocaleString('pt-BR');
   const metrics = [
@@ -69,12 +72,23 @@ export const ImportOverview = ({
       Icon: IconRefresh,
     },
     {
-      title: 'Criados no Twenty',
-      value: number(state?.created),
+      title:
+        sample && state?.preview ? 'Registros da amostra' : 'Criados no Twenty',
+      value: number(
+        sample && state?.preview
+          ? state.preview.status === 'REMOVED'
+            ? 0
+            : state.preview.owned
+          : state?.created,
+      ),
       note:
-        state?.dryRun === false
-          ? 'Registros criados nesta migração'
-          : 'Simulação não cria dados de negócio',
+        sample && state?.preview
+          ? state.preview.status === 'REMOVED'
+            ? 'Dados operacionais enviados à lixeira'
+            : 'Rastreamento de exclusão; inclui vínculos'
+          : state?.dryRun === false
+            ? 'Registros criados nesta migração'
+            : 'Simulação não cria dados de negócio',
       Icon: IconCheck,
     },
     {
@@ -89,6 +103,102 @@ export const ImportOverview = ({
   ];
   return (
     <>
+      <section
+        className="ri-card"
+        style={{ marginTop: 24 }}
+        aria-label="Teste recente e importação completa"
+      >
+        <div className="ri-card-header">
+          <h2>Teste primeiro. Importe toda a base depois.</h2>
+          <Tag color={full ? 'blue' : 'orange'}>
+            {full ? 'Importação completa' : 'Amostra de até 25 negociações'}
+          </Tag>
+        </div>
+        <p className="ri-muted">
+          O teste verifica as negociações mais recentes e seus vínculos. Depois
+          você pode criar essa amostra no Twenty para conferir o resultado, sem
+          percorrer toda a base. A importação completa lê todos os dados
+          disponíveis pela API, do mais recente ao mais antigo, preservando os
+          registros existentes.
+        </p>
+        <div className="ri-row" style={{ marginTop: 16, flexWrap: 'wrap' }}>
+          <ImportButton
+            disabled={
+              pending || running || !connected || state?.dryRun === false
+            }
+            startIcon={<IconPlayerPlay size={15} />}
+            onClick={() => onAction('simulate')}
+          >
+            Simular dados recentes
+          </ImportButton>
+          <ImportButton
+            emphasis
+            disabled={
+              pending ||
+              !connected ||
+              !sample ||
+              !state?.dryRun ||
+              state.status !== 'COMPLETED'
+            }
+            startIcon={<IconDownload size={15} />}
+            onClick={() => onAction('sample')}
+          >
+            Criar amostra no Twenty
+          </ImportButton>
+          {state?.preview && (
+            <ImportButton
+              disabled={
+                pending ||
+                running ||
+                !sample ||
+                ['REMOVED', 'PROMOTED'].includes(state.preview.status)
+              }
+              startIcon={<IconTrash size={15} />}
+              onClick={() => onAction('cleanup')}
+            >
+              {state.preview.status === 'REMOVED'
+                ? 'Amostra excluída'
+                : state.preview.status === 'PROMOTED'
+                  ? 'Amostra incorporada à base'
+                  : 'Excluir dados da amostra'}
+            </ImportButton>
+          )}
+        </div>
+        {state?.preview && (
+          <p className="ri-fine-print" style={{ marginTop: 12 }}>
+            {state.preview.owned.toLocaleString('pt-BR')} registros operacionais
+            identificados neste teste ·{' '}
+            {state.preview.removed.toLocaleString('pt-BR')} enviados à lixeira.
+            Registros anteriores são preservados; o histórico técnico é mantido.
+            Na importação completa, a amostra é reaproveitada sem duplicações.
+          </p>
+        )}
+        {state?.status === 'COMPLETED' && (state.dryRun || sample) && (
+          <>
+            <label className="ri-confirm">
+              <Checkbox
+                checked={acknowledged}
+                onCheckedChange={(value) => setAcknowledged(Boolean(value))}
+                className="ri-checkbox"
+                aria-label="Conferi o backup e autorizo criar os dados no Twenty"
+              />{' '}
+              <span>
+                Conferi o backup e o teste com a amostra. Entendo que os dados
+                antigos ainda não foram verificados e quero importar toda a base
+                disponível pela API.
+              </span>
+            </label>
+            <ImportButton
+              emphasis
+              startIcon={<IconDownload size={15} />}
+              disabled={!acknowledged || !connected || pending}
+              onClick={() => onAction('start')}
+            >
+              Importar tudo de vez
+            </ImportButton>
+          </>
+        )}
+      </section>
       <div className="ri-metrics">
         {metrics.map(({ title, value, note, Icon }) => (
           <article className="ri-metric" key={title}>
@@ -112,15 +222,23 @@ export const ImportOverview = ({
             <div className="ri-card-header">
               <div>
                 <div className="ri-eyebrow">
-                  {state?.dryRun === false
-                    ? 'Importação em produção'
-                    : 'Prévia da migração'}
+                  {sample
+                    ? 'Teste com dados recentes'
+                    : state?.dryRun === false
+                      ? 'Importação em produção'
+                      : 'Prévia da migração'}
                 </div>
                 <h2 style={{ marginTop: 6 }}>
                   {state
-                    ? state.dryRun
-                      ? 'Simulação dos dados'
-                      : 'Importação dos dados'
+                    ? sample
+                      ? state.dryRun
+                        ? 'Simulação da amostra recente'
+                        : state.preview?.status === 'REMOVED'
+                          ? 'Amostra enviada à lixeira'
+                          : 'Amostra criada no Twenty'
+                      : state.dryRun
+                        ? 'Simulação dos dados'
+                        : 'Importação dos dados'
                     : 'Prepare sua primeira simulação'}
                 </h2>
               </div>
@@ -170,7 +288,9 @@ export const ImportOverview = ({
                       ? 'O processamento foi interrompido em um checkpoint seguro.'
                       : state.status === 'COMPLETED'
                         ? state.dryRun
-                          ? 'A leitura das listagens terminou. A importação real continua dependendo da sua confirmação.'
+                          ? sample
+                            ? 'A amostra recente foi verificada. Isso não valida os registros antigos. Crie a amostra para conferir o resultado ou inicie a importação completa quando estiver pronto.'
+                            : 'A leitura das listagens terminou. A importação real continua dependendo da sua confirmação.'
                           : 'O processamento terminou. Confira os registros criados e preservados.'
                         : model.retrySeconds
                           ? 'Aguardando o intervalo da próxima tentativa, sem avançar o checkpoint.'
@@ -232,6 +352,23 @@ export const ImportOverview = ({
                         : '—'}
                     </strong>
                   </div>
+                  {state.selection && (
+                    <div className="ri-fact">
+                      <span className="ri-muted ri-tiny">
+                        Ordem e referência temporal
+                      </span>
+                      <strong>Mais recentes primeiro</strong>
+                      <span className="ri-fine-print">
+                        Base até{' '}
+                        {new Date(state.selection.cutoff).toLocaleString(
+                          'pt-BR',
+                        )}
+                        {state.selection.upper
+                          ? ` · próxima janela até ${new Date(state.selection.upper).toLocaleString('pt-BR')}`
+                          : ''}
+                      </span>
+                    </div>
+                  )}
                   <div className="ri-fact">
                     <span className="ri-muted ri-tiny">
                       Ritmo observado nesta sessão
@@ -309,6 +446,30 @@ export const ImportOverview = ({
             )}
           </section>
           <ImportResourceTable model={model} state={state} />
+          {sample && (
+            <section className="ri-card" aria-label="Vínculos da amostra">
+              <h3>Vínculos verificados junto das negociações</h3>
+              <div className="ri-facts" style={{ marginTop: 16 }}>
+                <div className="ri-fact">
+                  <span className="ri-muted">Empresas relacionadas</span>
+                  <strong>{number(state?.counts.organizations)}</strong>
+                </div>
+                <div className="ri-fact">
+                  <span className="ri-muted">Contatos relacionados</span>
+                  <strong>{number(state?.counts.contacts)}</strong>
+                </div>
+                <div className="ri-fact">
+                  <span className="ri-muted">Tarefas da amostra</span>
+                  <strong>{number(state?.counts.tasks)}</strong>
+                </div>
+              </div>
+              <p className="ri-fine-print" style={{ marginTop: 12 }}>
+                Empresas e contatos são consultados por ID para preservar as
+                relações, mesmo quando foram criados antes das negociações. As
+                tarefas são trazidas na criação da amostra.
+              </p>
+            </section>
+          )}
         </div>
         <aside className="ri-stack">
           <section className="ri-card">
@@ -323,7 +484,13 @@ export const ImportOverview = ({
                   color={state?.dryRun === false ? 'blue' : 'orange'}
                   className={`ri-tag ${state?.dryRun === false ? 'ri-tag-accent' : 'ri-tag-warning'}`}
                 >
-                  {state?.dryRun === false ? 'Importação real' : 'Simulação'}
+                  {sample
+                    ? state?.dryRun
+                      ? 'Simulação recente'
+                      : 'Amostra recente'
+                    : state?.dryRun === false
+                      ? 'Importação completa'
+                      : 'Simulação'}
                 </Tag>
               </div>
               <div className="ri-row ri-between">
@@ -400,32 +567,6 @@ export const ImportOverview = ({
                   {connected ? 'Simular os dados' : 'Configurar conexão'}
                 </ImportButton>
               ) : null}
-              {state?.status === 'COMPLETED' && state.dryRun && (
-                <>
-                  <label className="ri-confirm">
-                    <Checkbox
-                      checked={acknowledged}
-                      onCheckedChange={(value) =>
-                        setAcknowledged(Boolean(value))
-                      }
-                      className="ri-checkbox"
-                      aria-label="Conferi o backup e autorizo criar os dados no Twenty"
-                    />{' '}
-                    <span>
-                      Conferi o backup e o resultado da simulação. Quero criar
-                      os dados no Twenty.
-                    </span>
-                  </label>
-                  <ImportButton
-                    emphasis
-                    startIcon={<IconDownload size={15} />}
-                    disabled={!acknowledged || !connected || pending}
-                    onClick={() => onAction('start')}
-                  >
-                    Iniciar importação real
-                  </ImportButton>
-                </>
-              )}
               <ImportButton
                 onClick={onRecords}
                 endIcon={<IconArrowRight size={14} />}

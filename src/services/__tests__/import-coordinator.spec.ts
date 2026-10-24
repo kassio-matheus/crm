@@ -26,10 +26,11 @@ vi.mock('twenty-sdk/logic-function', () => ({
 }));
 import { ImportCoordinator } from '../import-coordinator';
 import type { ImportState } from 'src/types/import-state';
+import type { ImportTransition } from 'src/types/import-transition';
 const state = (): ImportState => ({
   id: 'run',
   accountKey: 'acme',
-  version: 'v1',
+  version: 'v2',
   dryRun: true,
   status: 'READY',
   phase: 'resources',
@@ -62,12 +63,99 @@ beforeEach(() => {
   mocks.jobs.mockResolvedValue([]);
   mocks.get.mockResolvedValue(null);
   process.env.RD_CREDENTIALS = JSON.stringify({
-    version: 'v1',
+    version: 'v2',
     accountKey: 'acme',
     accessToken: 'SECRET',
+    clientId: 'client',
+    clientSecret: 'SECRET',
+    refreshToken: 'SECRET',
   });
 });
 describe('ImportCoordinator', () => {
+  it('uses the same atomic winning transition and queue slot for competing sample and full-import commands', async () => {
+    const previous = {
+      ...state(),
+      status: 'COMPLETED' as const,
+      phase: 'done' as const,
+      selection: {
+        scope: 'sample' as const,
+        limit: 25,
+        cutoff: '2026-10-24T00:00:00Z',
+        selectedDeals: ['one'],
+      },
+    };
+    let retained: ImportTransition | undefined;
+    let retainedId: string | undefined;
+    mocks.query.mockImplementation(async (request) => ({
+      rdSourceRecords: {
+        edges: [
+          {
+            node: {
+              sourcePayload:
+                request.rdSourceRecords.__args.filter.id.eq === retainedId
+                  ? retained
+                  : previous,
+            },
+          },
+        ],
+      },
+    }));
+    mocks.mutation.mockImplementation(async (request) => {
+      const create = request.createRdSourceRecord?.__args.data;
+      if (create?.recordKind === 'scopeTransition') {
+        if (retained) throw new Error('unique transition');
+        retained = structuredClone(create.sourcePayload);
+        retainedId = create.id;
+      }
+      return {};
+    });
+    const [sample, full] = await Promise.all([
+      new ImportCoordinator().control('sample'),
+      new ImportCoordinator().control('start'),
+    ]);
+    expect(sample?.id).toBe(full?.id);
+    expect(mocks.enqueue.mock.calls[0][0].jobs[0].jobId).toBe(
+      mocks.enqueue.mock.calls[1][0].jobs[0].jobId,
+    );
+    expect(mocks.enqueue.mock.calls[0][0].jobs[0].payload.transitionId).toBe(
+      retainedId,
+    );
+    expect(
+      mocks.mutation.mock.calls.some(
+        ([request]) => request.updateRdSourceRecord,
+      ),
+    ).toBe(false);
+  });
+  it('keeps a durable scope proposal recoverable after initialization fails, choosing one fixed retry slot', async () => {
+    const previous = {
+      ...state(),
+      status: 'COMPLETED' as const,
+      phase: 'done' as const,
+      selection: {
+        scope: 'sample' as const,
+        limit: 25,
+        cutoff: '2026-10-24T00:00:00Z',
+        selectedDeals: ['one'],
+      },
+    };
+    mocks.query.mockResolvedValue({
+      rdSourceRecords: { edges: [{ node: { sourcePayload: previous } }] },
+    });
+    mocks.jobs.mockImplementation(async (ids: string[]) =>
+      ids[0]?.startsWith('rd-scope-')
+        ? [{ jobId: ids[0], state: 'FAILED' }]
+        : [],
+    );
+    await new ImportCoordinator().control('sample');
+    expect(mocks.enqueue.mock.calls[0][0].jobs[0].jobId).toMatch(
+      /rd-scope-.*-1$/,
+    );
+    expect(
+      mocks.mutation.mock.calls.some(
+        ([request]) => request.updateRdSourceRecord,
+      ),
+    ).toBe(false);
+  });
   it('requires admin permission even for manually invoked functions', async () => {
     mocks.metadata.mockRejectedValue(new Error('Forbidden'));
     await expect(new ImportCoordinator().control('start')).rejects.toThrow(
@@ -113,6 +201,101 @@ describe('ImportCoordinator', () => {
     mocks.jobs.mockResolvedValue([{ jobId: 'active', state: 'ACTIVE' }]);
     await new ImportCoordinator().control('resume');
     expect(mocks.enqueue).not.toHaveBeenCalled();
+  });
+  it('does not restart a completed live migration on repeated start, simulate or resume commands', async () => {
+    const completed = {
+      ...state(),
+      dryRun: false,
+      status: 'COMPLETED' as const,
+      phase: 'done' as const,
+    };
+    mocks.query.mockResolvedValue({
+      rdSourceRecords: { edges: [{ node: { sourcePayload: completed } }] },
+    });
+    for (const action of ['start', 'simulate', 'resume'] as const)
+      expect(await new ImportCoordinator().control(action)).toEqual(completed);
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+    expect(mocks.mutation).not.toHaveBeenCalled();
+  });
+  it('starts complete recent-first reads only after a completed sample and locks cleanup', async () => {
+    const existing = {
+      ...state(),
+      dryRun: false,
+      status: 'COMPLETED' as const,
+      phase: 'done' as const,
+      selection: {
+        scope: 'sample' as const,
+        limit: 25,
+        cutoff: '2026-10-24T00:00:00Z',
+        selectedDeals: ['one'],
+      },
+      preview: {
+        runId: 'sample',
+        status: 'AVAILABLE' as const,
+        owned: 3,
+        removed: 0,
+      },
+    };
+    mocks.query.mockResolvedValue({
+      rdSourceRecords: { edges: [{ node: { sourcePayload: existing } }] },
+    });
+    const result = await new ImportCoordinator().control('start');
+    expect(result).toMatchObject({
+      dryRun: false,
+      selection: { scope: 'all' },
+      preview: { status: 'PROMOTED' },
+      maintenance: 'restore',
+    });
+    expect(result!.plan!.indexOf('deals')).toBeLessThan(
+      result!.plan!.indexOf('organizations'),
+    );
+    expect(mocks.enqueue).toHaveBeenCalledTimes(1);
+  });
+  it('refuses sample creation before a recent simulation has completed', async () => {
+    mocks.query.mockResolvedValue({
+      rdSourceRecords: { edges: [{ node: { sourcePayload: state() } }] },
+    });
+    await expect(new ImportCoordinator().control('sample')).rejects.toThrow(
+      'Finish the recent sample',
+    );
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+  });
+  it('cannot delete sample records after they are incorporated into a full import', async () => {
+    mocks.query.mockResolvedValue({
+      rdSourceRecords: {
+        edges: [
+          {
+            node: {
+              sourcePayload: {
+                ...state(),
+                dryRun: false,
+                selection: { scope: 'all' },
+                preview: { runId: 'sample', status: 'PROMOTED' },
+              },
+            },
+          },
+        ],
+      },
+    });
+    await expect(new ImportCoordinator().control('cleanup')).rejects.toThrow(
+      'Only records owned',
+    );
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+  });
+  it('rejects a changed company key before another migration can be queued', async () => {
+    mocks.query.mockResolvedValue({
+      rdSourceRecords: { edges: [{ node: { sourcePayload: state() } }] },
+    });
+    process.env.RD_CREDENTIALS = JSON.stringify({
+      version: 'v1',
+      accountKey: 'another-company',
+      accessToken: 'SECRET',
+    });
+    await expect(new ImportCoordinator().control('simulate')).rejects.toThrow(
+      'another company',
+    );
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+    expect(mocks.mutation).not.toHaveBeenCalled();
   });
   it('requests pause without modifying a running checkpoint', async () => {
     await new ImportCoordinator().control('pause');

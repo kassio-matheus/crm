@@ -23,8 +23,8 @@ it('requires explicit host confirmation and allows cancellation', async () => {
   expect(await confirmImportStart(state)).toBe(true);
   expect(modal).toHaveBeenCalledWith(
     expect.objectContaining({
-      title: 'Iniciar importação real?',
-      confirmButtonText: 'Criar os dados no Twenty',
+      title: 'Importar todos os dados disponíveis?',
+      confirmButtonText: 'Importar tudo de vez',
     }),
   );
 });

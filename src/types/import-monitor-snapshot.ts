@@ -7,7 +7,8 @@ export type ImportMonitorSnapshot = {
   lastSyncedAt: number | null;
   nextPollAt: number | null;
   failures: number;
-  pendingAction: 'simulate' | 'start' | 'pause' | 'resume' | null;
+  pendingAction:
+    'simulate' | 'sample' | 'start' | 'cleanup' | 'pause' | 'resume' | null;
   recordsPerMinute: number | null;
   requestsPerMinute: number | null;
 };

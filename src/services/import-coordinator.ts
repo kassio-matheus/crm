@@ -11,6 +11,9 @@ import { APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identi
 import type { ImportState } from 'src/types/import-state';
 import { sourceId } from 'src/utils/source-id.util';
 import { parseCredentials } from 'src/utils/parse-credentials.util';
+import { newRecentImport } from 'src/utils/new-recent-import.util';
+import type { ImportAction } from 'src/types/import-action';
+import type { ImportTransition } from 'src/types/import-transition';
 
 /** All worker executions share a retained queue ID per checkpoint. Only the worker writes progress. */
 export class ImportCoordinator {
@@ -40,9 +43,7 @@ export class ImportCoordinator {
     });
   }
 
-  async control(
-    action: 'status' | 'simulate' | 'start' | 'pause' | 'resume',
-  ): Promise<ImportState | null> {
+  async control(action: ImportAction): Promise<ImportState | null> {
     // Reading a variable value requires APPLICATIONS on both the app and the person.
     // This checks authorization before any job is enqueued, including for manually executed calls.
     await new MetadataApiClient().query({
@@ -92,9 +93,101 @@ export class ImportCoordinator {
       throw new Error('Run a simulation before starting the migration.');
     if (action === 'start' && state?.dryRun && state.status !== 'COMPLETED')
       throw new Error('Finish the simulation before importing.');
-    if (!state) {
-      const now = new Date().toISOString();
+    const active = state ? await this.latestJob(state) : { job: undefined };
+    if (active.job && !['COMPLETED', 'FAILED'].includes(active.job.state))
+      return state;
+    const previous = state;
+    let transitionId: string | undefined;
+    if (action === 'simulate' && (!state || state.dryRun))
+      state = newRecentImport(credentials, state, 'sample', true);
+    else if (action === 'sample') {
+      if (
+        !state?.dryRun ||
+        state.status !== 'COMPLETED' ||
+        state.selection?.scope !== 'sample'
+      )
+        throw new Error('Finish the recent sample simulation first.');
+      state = newRecentImport(credentials, state, 'sample', false);
+    } else if (action === 'start' && state?.selection?.scope === 'sample') {
+      if (state.status !== 'COMPLETED')
+        throw new Error('Finish the recent sample before importing all data.');
+      state = newRecentImport(credentials, state, 'all', false);
+    } else if (action === 'cleanup') {
+      if (
+        !state ||
+        state.selection?.scope !== 'sample' ||
+        !state.preview ||
+        state.preview.status === 'PROMOTED'
+      )
+        throw new Error(
+          'Only records owned by the recent sample can be removed.',
+        );
+      if (state.preview.status === 'REMOVED') return state;
       state = {
+        ...state,
+        maintenance: 'cleanup',
+        status: 'READY',
+        error: null,
+        revision: state.revision + 1,
+        preview: { ...state.preview, status: 'CLEANING' },
+      };
+    }
+    if (state && previous && state !== previous) {
+      // One atomic claim per source checkpoint. Competing scope commands share
+      // the winning proposal and queue ID; only that queued worker changes progress.
+      const transitionKey = `scope-transition:${previous.id}:${previous.revision}`;
+      transitionId = sourceId(transitionKey);
+      let transition: ImportTransition = { action, previous, next: state };
+      try {
+        await this.client.mutation({
+          createRdSourceRecord: {
+            __args: {
+              data: {
+                id: transitionId,
+                sourceKey: transitionKey,
+                recordKind: 'scopeTransition',
+                name: 'Migration scope transition and previous checkpoint',
+                sourcePayload: transition,
+              },
+            },
+            id: true,
+          },
+        });
+      } catch (error) {
+        const found = await this.client.query({
+          rdSourceRecords: {
+            __args: { first: 1, filter: { id: { eq: transitionId } } },
+            edges: { node: { sourcePayload: true } },
+          },
+        });
+        const retained = found.rdSourceRecords!.edges[0]?.node.sourcePayload as
+          ImportTransition | undefined;
+        if (
+          !retained ||
+          retained.previous?.id !== previous.id ||
+          retained.previous.revision !== previous.revision ||
+          retained.next?.accountKey !== previous.accountKey
+        )
+          throw error;
+        transition = retained;
+      }
+      action = transition.action;
+      state = transition.next;
+      // A worker may already have initialized or advanced the winning proposal.
+      const current = await this.read();
+      if (
+        current &&
+        (current.id !== previous.id || current.revision !== previous.revision)
+      ) {
+        if (current.id !== state.id) return current;
+        state = current;
+        transitionId = undefined;
+      }
+    }
+    const needsControlRecord = !previous;
+    if (needsControlRecord) {
+      const now = new Date().toISOString();
+      state ??= {
         id: sourceId(`migration:${credentials.accountKey}`),
         accountKey: credentials.accountKey,
         version: credentials.version,
@@ -144,23 +237,48 @@ export class ImportCoordinator {
         state = existing;
       }
     }
+    if (!state) throw new Error('Missing migration checkpoint.');
     const { job } = await this.latestJob(state);
     if (job && !['COMPLETED', 'FAILED'].includes(job.state)) return state;
     if (state.status === 'COMPLETED' && (!state.dryRun || action !== 'start'))
       return state;
     if (action === 'simulate' && !state.dryRun)
       throw new Error('A live migration already exists. Resume it instead.');
-    await kv.set('rd:pause', false);
     // Duplicate clicks use the same resume ID. A completed/failed queue item is never silently re-enqueued.
-    const token = `${state.revision}-${job?.jobId ?? 'initial'}-${job?.attemptsMade ?? 0}`;
-    const jobId = `rd-command-${sourceId(token)}`;
+    const token = `${state.id}-${state.revision}-${job?.jobId ?? 'initial'}-${job?.attemptsMade ?? 0}`;
+    let jobId = `rd-command-${sourceId(token)}`;
+    if (transitionId) {
+      // Fixed slots do not depend on the mutable command pointer. Two callers
+      // racing before enqueue therefore still choose exactly the same queue ID.
+      const candidates = Array.from(
+        { length: 4 },
+        (_, index) => `rd-scope-${transitionId}-${index}`,
+      );
+      const attempts = await getJobs(candidates);
+      const available = candidates.find(
+        (id) => !attempts.some((attempt) => attempt.jobId === id),
+      );
+      if (attempts.some((attempt) => attempt.state !== 'FAILED')) return state;
+      if (!available)
+        throw new Error(
+          'RD_SCOPE_RETRY_LIMIT: the scope change could not be initialized after four attempts. The previous checkpoint was preserved.',
+        );
+      jobId = available;
+    }
+    await kv.set('rd:pause', false);
     await kv.set('rd:command-job', jobId);
     await enqueueJobs({
       logicFunctionUniversalIdentifier: IMPORT_WORKER,
       jobs: [
         {
           jobId,
-          payload: { command: action === 'start' ? 'live' : 'continue', jobId },
+          payload: {
+            command:
+              action === 'start' && !state.selection ? 'live' : 'continue',
+            jobId,
+            runId: state.id,
+            ...(transitionId ? { transitionId } : {}),
+          },
         },
       ],
       delayMs: Math.max(0, state.nextRequestAt - Date.now()),
@@ -176,7 +294,12 @@ export class ImportCoordinator {
     // Checkpoint first: a failed enqueue is recoverable from the page without repeating completed records.
     await enqueueJobs({
       logicFunctionUniversalIdentifier: IMPORT_WORKER,
-      jobs: [{ jobId: state.jobId, payload: { revision: state.revision } }],
+      jobs: [
+        {
+          jobId: state.jobId,
+          payload: { revision: state.revision, runId: state.id },
+        },
+      ],
       delayMs: Math.max(delayMs, state.nextRequestAt - Date.now()),
     });
   }

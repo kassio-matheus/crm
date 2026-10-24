@@ -1,5 +1,23 @@
 import { expect, it } from 'vitest';
 import { importDiagnostic } from '../import-diagnostic.util';
+it('blocks timestamp filters that cannot advance without data loss', () => {
+  expect(
+    importDiagnostic(
+      importState({ error: 'RD_DENSE_TIMESTAMP_LIMIT: details' }),
+    ),
+  ).toMatchObject({
+    canResume: false,
+    title: 'Muitos registros com a mesma data',
+  });
+});
+it('explains why cleanup preserves sample data used by outside records', () => {
+  expect(
+    importDiagnostic(importState({ error: 'RD_PREVIEW_IN_USE: details' })),
+  ).toMatchObject({
+    canResume: true,
+    title: 'A amostra está sendo usada por outros registros',
+  });
+});
 import type { ImportState } from 'src/types/import-state';
 import { importState } from 'src/__tests__/fixtures/import-state';
 it('explains the observed 10k list limit without inviting a futile retry', () => {

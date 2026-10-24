@@ -33,7 +33,7 @@ export class ImportDependencies {
             first: 1,
             filter: { id: { eq: sourceId(`archive:${key}`) } },
           },
-          edges: { node: { targetId: true, sourcePayload: true } },
+          edges: { node: { targetId: true } },
         },
       });
       const archived = existing.rdSourceRecords!.edges[0]?.node;
@@ -42,16 +42,23 @@ export class ImportDependencies {
         dependency.kind === 'organizations' &&
         archived?.targetId === sourceId(key)
       ) {
-        const source = archived.sourcePayload as
-          Record<string, unknown> | undefined;
-        if (source && (source.id ?? source._id) === dependency.id)
-          await this.importer.import(
-            dependency.kind,
-            source,
-            this.state.accountKey,
-            this.state.id,
-            false,
-          );
+        // Read the current RD owner rather than assigning from an older snapshot.
+        const response = await this.reader.list(
+          `${dependency.kind}/${encodeURIComponent(dependency.id)}`,
+          1,
+          null,
+          true,
+        );
+        const source = response.records[0];
+        if (!source || (source.id ?? source._id) !== dependency.id)
+          throw new Error('RD_REFERENCE_MISMATCH');
+        await this.importer.import(
+          dependency.kind,
+          source,
+          this.state.accountKey,
+          this.state.id,
+          false,
+        );
       }
       if (!archived?.targetId) {
         const response = await this.reader.list(

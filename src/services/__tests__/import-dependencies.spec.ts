@@ -77,9 +77,10 @@ it('deduplicates validated dependencies across sample pages without writing busi
   expect(test.state.selection.dependencyKeys).toHaveLength(1);
 });
 
-it('replays an existing linked company to fill its empty owner without another RD request', async () => {
+it('replays the current linked company once per batch instead of assigning its historical owner', async () => {
   const test = setup();
-  const source = { id: 'org', owner_id: 'owner' };
+  const source = { id: 'org', owner_id: 'current-owner' };
+  test.list.mockResolvedValue({ records: [source] });
   test.query.mockResolvedValue({
     rdSourceRecords: {
       edges: [
@@ -94,7 +95,7 @@ it('replays an existing linked company to fill its empty owner without another R
   });
   await test.service.ensure('deals', { organization_id: 'org' });
   await test.service.ensure('deals', { organization_id: 'org' });
-  expect(test.list).not.toHaveBeenCalled();
+  expect(test.list).toHaveBeenCalledTimes(1);
   expect(test.run).toHaveBeenCalledTimes(1);
   expect(test.run).toHaveBeenCalledWith(
     'organizations',

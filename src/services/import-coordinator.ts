@@ -11,6 +11,8 @@ import { APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identi
 import type { ImportState } from 'src/types/import-state';
 import { sourceId } from 'src/utils/source-id.util';
 import { parseCredentials } from 'src/utils/parse-credentials.util';
+import { newRecentImport } from 'src/utils/new-recent-import.util';
+import type { ImportAction } from 'src/types/import-action';
 
 /** All worker executions share a retained queue ID per checkpoint. Only the worker writes progress. */
 export class ImportCoordinator {
@@ -40,9 +42,7 @@ export class ImportCoordinator {
     });
   }
 
-  async control(
-    action: 'status' | 'simulate' | 'start' | 'pause' | 'resume',
-  ): Promise<ImportState | null> {
+  async control(action: ImportAction): Promise<ImportState | null> {
     // Reading a variable value requires APPLICATIONS on both the app and the person.
     // This checks authorization before any job is enqueued, including for manually executed calls.
     await new MetadataApiClient().query({
@@ -92,9 +92,74 @@ export class ImportCoordinator {
       throw new Error('Run a simulation before starting the migration.');
     if (action === 'start' && state?.dryRun && state.status !== 'COMPLETED')
       throw new Error('Finish the simulation before importing.');
-    if (!state) {
-      const now = new Date().toISOString();
+    const active = state ? await this.latestJob(state) : { job: undefined };
+    if (active.job && !['COMPLETED', 'FAILED'].includes(active.job.state))
+      return state;
+    const previous = state;
+    if (action === 'simulate' && (!state || state.dryRun))
+      state = newRecentImport(credentials, state, 'sample', true);
+    else if (action === 'sample') {
+      if (
+        !state?.dryRun ||
+        state.status !== 'COMPLETED' ||
+        state.selection?.scope !== 'sample'
+      )
+        throw new Error('Finish the recent sample simulation first.');
+      state = newRecentImport(credentials, state, 'sample', false);
+    } else if (action === 'start' && state?.selection?.scope === 'sample') {
+      if (state.status !== 'COMPLETED')
+        throw new Error('Finish the recent sample before importing all data.');
+      state = newRecentImport(credentials, state, 'all', false);
+    } else if (action === 'cleanup') {
+      if (
+        !state ||
+        state.selection?.scope !== 'sample' ||
+        !state.preview ||
+        state.preview.status === 'PROMOTED'
+      )
+        throw new Error(
+          'Only records owned by the recent sample can be removed.',
+        );
+      if (state.preview.status === 'REMOVED') return state;
       state = {
+        ...state,
+        maintenance: 'cleanup',
+        status: 'READY',
+        error: null,
+        revision: state.revision + 1,
+        preview: { ...state.preview, status: 'CLEANING' },
+      };
+    }
+    if (state && previous && state !== previous) {
+      // Keep the previous checkpoint for audit before an explicit scope change.
+      const backupKey = `checkpoint-backup:${previous.id}:${previous.revision}`;
+      const backup = await this.client.query({
+        rdSourceRecords: {
+          __args: { first: 1, filter: { id: { eq: sourceId(backupKey) } } },
+          edges: { node: { id: true } },
+        },
+      });
+      if (!backup.rdSourceRecords!.edges.length)
+        await this.client.mutation({
+          createRdSourceRecord: {
+            __args: {
+              data: {
+                id: sourceId(backupKey),
+                sourceKey: backupKey,
+                recordKind: 'checkpointBackup',
+                name: 'Migration checkpoint before scope change',
+                sourcePayload: previous,
+              },
+            },
+            id: true,
+          },
+        });
+      await this.save(state);
+    }
+    const needsControlRecord = !previous;
+    if (needsControlRecord) {
+      const now = new Date().toISOString();
+      state ??= {
         id: sourceId(`migration:${credentials.accountKey}`),
         accountKey: credentials.accountKey,
         version: credentials.version,
@@ -144,6 +209,7 @@ export class ImportCoordinator {
         state = existing;
       }
     }
+    if (!state) throw new Error('Missing migration checkpoint.');
     const { job } = await this.latestJob(state);
     if (job && !['COMPLETED', 'FAILED'].includes(job.state)) return state;
     if (state.status === 'COMPLETED' && (!state.dryRun || action !== 'start'))
@@ -152,7 +218,7 @@ export class ImportCoordinator {
       throw new Error('A live migration already exists. Resume it instead.');
     await kv.set('rd:pause', false);
     // Duplicate clicks use the same resume ID. A completed/failed queue item is never silently re-enqueued.
-    const token = `${state.revision}-${job?.jobId ?? 'initial'}-${job?.attemptsMade ?? 0}`;
+    const token = `${state.id}-${state.revision}-${job?.jobId ?? 'initial'}-${job?.attemptsMade ?? 0}`;
     const jobId = `rd-command-${sourceId(token)}`;
     await kv.set('rd:command-job', jobId);
     await enqueueJobs({
@@ -160,7 +226,12 @@ export class ImportCoordinator {
       jobs: [
         {
           jobId,
-          payload: { command: action === 'start' ? 'live' : 'continue', jobId },
+          payload: {
+            command:
+              action === 'start' && !state.selection ? 'live' : 'continue',
+            jobId,
+            runId: state.id,
+          },
         },
       ],
       delayMs: Math.max(0, state.nextRequestAt - Date.now()),
@@ -176,7 +247,12 @@ export class ImportCoordinator {
     // Checkpoint first: a failed enqueue is recoverable from the page without repeating completed records.
     await enqueueJobs({
       logicFunctionUniversalIdentifier: IMPORT_WORKER,
-      jobs: [{ jobId: state.jobId, payload: { revision: state.revision } }],
+      jobs: [
+        {
+          jobId: state.jobId,
+          payload: { revision: state.revision, runId: state.id },
+        },
+      ],
       delayMs: Math.max(delayMs, state.nextRequestAt - Date.now()),
     });
   }

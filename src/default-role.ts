@@ -33,7 +33,7 @@ export default defineApplicationRole({
       objectUniversalIdentifier: object.universalIdentifier,
       canReadObjectRecords: true,
       canUpdateObjectRecords: true,
-      canSoftDeleteObjectRecords: false,
+      canSoftDeleteObjectRecords: true,
       canDestroyObjectRecords: false,
     })),
     {
@@ -46,7 +46,7 @@ export default defineApplicationRole({
         objectUniversalIdentifier,
         canReadObjectRecords: true,
         canUpdateObjectRecords: true,
-        canSoftDeleteObjectRecords: false,
+        canSoftDeleteObjectRecords: true,
         canDestroyObjectRecords: false,
       }),
     ),

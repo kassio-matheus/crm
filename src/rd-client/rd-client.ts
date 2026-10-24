@@ -2,6 +2,7 @@ import type { RdCredentials } from 'src/types/rd-credentials';
 import { rdFetch } from 'src/rd-client/rd-fetch';
 import { RdOAuthClient } from 'src/rd-client/rd-oauth-client';
 import { rdPaginationUrl } from 'src/utils/rd-pagination-url.util';
+import type { RdListOptions } from 'src/types/rd-list-options';
 
 /** One request per worker run, including retries and OAuth refreshes. Never log URLs or response bodies. */
 export class RdClient {
@@ -16,6 +17,7 @@ export class RdClient {
     page: number,
     nextPath: string | null = null,
     single = false,
+    options?: RdListOptions,
   ): Promise<{
     records: Record<string, unknown>[];
     next: string | null;
@@ -30,17 +32,40 @@ export class RdClient {
       );
       url.searchParams.set(
         version === 'v1' ? 'limit' : 'page[size]',
-        path.endsWith('/files')
-          ? '1'
-          : version === 'v1' && path.startsWith('deal_stages')
-            ? '12'
-            : '25',
+        options?.size
+          ? String(options.size)
+          : path.endsWith('/files')
+            ? '1'
+            : version === 'v1' && path.startsWith('deal_stages')
+              ? '12'
+              : '25',
       );
+    }
+    if (!single && version === 'v2' && options) {
+      const expected = rdPaginationUrl(version, path);
+      if (options.sort)
+        expected.searchParams.set(`sort[${options.sort}]`, 'desc');
+      if (options.upper) {
+        if (!Number.isFinite(Date.parse(options.upper)))
+          throw new Error('RD_INVALID_WINDOW');
+        const existing = expected.searchParams.get('filter');
+        expected.searchParams.set(
+          'filter',
+          `${existing ? `(${existing}) ` : ''}created_at:<=\"${options.upper}\"`,
+        );
+      }
+      for (const key of ['filter', 'sort[created_at]', 'sort[updated_at]']) {
+        const value = expected.searchParams.get(key);
+        if (nextPath && (url.searchParams.get(key) ?? '') !== (value ?? ''))
+          throw new Error('Unsafe pagination filter returned by RD Station.');
+        if (value !== null) url.searchParams.set(key, value);
+      }
     }
     if (
       !single &&
       !nextPath &&
-      ['deals', 'contacts', 'organizations'].includes(path)
+      ['deals', 'contacts', 'organizations'].includes(path) &&
+      !options
     ) {
       url.searchParams.set(
         version === 'v1' ? 'order' : 'sort[created_at]',
@@ -116,6 +141,16 @@ export class RdClient {
       typeof links?.next === 'string' && links.next
         ? rdPaginationUrl(version, path, links.next).href
         : null;
+    if (next && options) {
+      const cursor = new URL(next);
+      for (const key of ['filter', 'sort[created_at]', 'sort[updated_at]']) {
+        if (
+          (cursor.searchParams.get(key) ?? '') !==
+          (url.searchParams.get(key) ?? '')
+        )
+          throw new Error('Unsafe pagination filter returned by RD Station.');
+      }
+    }
     if (next && next === url.href)
       throw new Error('RD returned a repeated pagination cursor.');
     if (version === 'v1' && page * 25 >= 10_000 && records.length === 25)

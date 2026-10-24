@@ -29,7 +29,7 @@ import type { ImportState } from 'src/types/import-state';
 const state = (): ImportState => ({
   id: 'run',
   accountKey: 'acme',
-  version: 'v1',
+  version: 'v2',
   dryRun: true,
   status: 'READY',
   phase: 'resources',
@@ -62,9 +62,12 @@ beforeEach(() => {
   mocks.jobs.mockResolvedValue([]);
   mocks.get.mockResolvedValue(null);
   process.env.RD_CREDENTIALS = JSON.stringify({
-    version: 'v1',
+    version: 'v2',
     accountKey: 'acme',
     accessToken: 'SECRET',
+    clientId: 'client',
+    clientSecret: 'SECRET',
+    refreshToken: 'SECRET',
   });
 });
 describe('ImportCoordinator', () => {
@@ -128,6 +131,71 @@ describe('ImportCoordinator', () => {
       expect(await new ImportCoordinator().control(action)).toEqual(completed);
     expect(mocks.enqueue).not.toHaveBeenCalled();
     expect(mocks.mutation).not.toHaveBeenCalled();
+  });
+  it('starts complete recent-first reads only after a completed sample and locks cleanup', async () => {
+    const existing = {
+      ...state(),
+      dryRun: false,
+      status: 'COMPLETED' as const,
+      phase: 'done' as const,
+      selection: {
+        scope: 'sample' as const,
+        limit: 25,
+        cutoff: '2026-10-24T00:00:00Z',
+        selectedDeals: ['one'],
+      },
+      preview: {
+        runId: 'sample',
+        status: 'AVAILABLE' as const,
+        owned: 3,
+        removed: 0,
+      },
+    };
+    mocks.query.mockResolvedValue({
+      rdSourceRecords: { edges: [{ node: { sourcePayload: existing } }] },
+    });
+    const result = await new ImportCoordinator().control('start');
+    expect(result).toMatchObject({
+      dryRun: false,
+      selection: { scope: 'all' },
+      preview: { status: 'PROMOTED' },
+      maintenance: 'restore',
+    });
+    expect(result!.plan!.indexOf('deals')).toBeLessThan(
+      result!.plan!.indexOf('organizations'),
+    );
+    expect(mocks.enqueue).toHaveBeenCalledTimes(1);
+  });
+  it('refuses sample creation before a recent simulation has completed', async () => {
+    mocks.query.mockResolvedValue({
+      rdSourceRecords: { edges: [{ node: { sourcePayload: state() } }] },
+    });
+    await expect(new ImportCoordinator().control('sample')).rejects.toThrow(
+      'Finish the recent sample',
+    );
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+  });
+  it('cannot delete sample records after they are incorporated into a full import', async () => {
+    mocks.query.mockResolvedValue({
+      rdSourceRecords: {
+        edges: [
+          {
+            node: {
+              sourcePayload: {
+                ...state(),
+                dryRun: false,
+                selection: { scope: 'all' },
+                preview: { runId: 'sample', status: 'PROMOTED' },
+              },
+            },
+          },
+        ],
+      },
+    });
+    await expect(new ImportCoordinator().control('cleanup')).rejects.toThrow(
+      'Only records owned',
+    );
+    expect(mocks.enqueue).not.toHaveBeenCalled();
   });
   it('rejects a changed company key before another migration can be queued', async () => {
     mocks.query.mockResolvedValue({

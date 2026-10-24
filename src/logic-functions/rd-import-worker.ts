@@ -7,10 +7,11 @@ export default defineLogicFunction({
   name: 'rd-import-worker',
   description:
     'Process one RD Station CRM page at a time using durable checkpoints, create-only deterministic records and a paced background job chain.',
-  timeoutSeconds: 300,
+  timeoutSeconds: 900,
   handler: async (payload: {
     revision?: number;
     command?: 'live' | 'continue';
     jobId?: string;
+    runId?: string;
   }) => new ImportWorker().run(payload),
 });

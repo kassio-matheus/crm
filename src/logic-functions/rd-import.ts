@@ -1,6 +1,7 @@
 import { defineLogicFunction } from 'twenty-sdk/define';
 import { IMPORT_CONTROL } from 'src/constants/rd-identifiers';
 import { ImportCoordinator } from 'src/services/import-coordinator';
+import type { ImportAction } from 'src/types/import-action';
 
 export default defineLogicFunction({
   universalIdentifier: IMPORT_CONTROL,
@@ -15,19 +16,25 @@ export default defineLogicFunction({
   },
   handler: async (
     event:
-      | { action: 'status' | 'simulate' | 'start' | 'pause' | 'resume' }
+      | { action: ImportAction }
       | {
           body: {
-            action: 'status' | 'simulate' | 'start' | 'pause' | 'resume';
+            action: ImportAction;
           };
         },
   ) => {
     const payload = event && 'body' in event ? event.body : event;
     if (
       !payload ||
-      !['status', 'simulate', 'start', 'pause', 'resume'].includes(
-        payload.action,
-      )
+      ![
+        'status',
+        'simulate',
+        'sample',
+        'start',
+        'cleanup',
+        'pause',
+        'resume',
+      ].includes(payload.action)
     )
       throw new Error('Invalid import action.');
     return new ImportCoordinator().control(payload.action);

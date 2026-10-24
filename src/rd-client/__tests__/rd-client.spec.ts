@@ -144,12 +144,16 @@ describe('single-record source details', () => {
   });
 });
 
-
 describe('safe v2 pagination recovery', () => {
   it('resumes the observed organizations checkpoint using only a canonical GET', async () => {
-    fetcher.mockResolvedValue(new Response(JSON.stringify({ data: [], links: {} })));
-    await new RdClient(v2, save, fetcher).list('organizations', 2,
-      'https://api.rd.services/api/v2/organizations?sort[created_at]=asc&page[number]=2&page[size]=25');
+    fetcher.mockResolvedValue(
+      new Response(JSON.stringify({ data: [], links: {} })),
+    );
+    await new RdClient(v2, save, fetcher).list(
+      'organizations',
+      2,
+      'https://api.rd.services/api/v2/organizations?sort[created_at]=asc&page[number]=2&page[size]=25',
+    );
     const [target, init] = fetcher.mock.calls[0];
     const url = new URL(String(target));
     expect(url.pathname).toBe('/crm/v2/organizations');
@@ -158,28 +162,126 @@ describe('safe v2 pagination recovery', () => {
     expect(init).toMatchObject({ method: 'GET', redirect: 'error' });
   });
   it('stores returned aliases as canonical next-page checkpoints', async () => {
-    fetcher.mockResolvedValue(new Response(JSON.stringify({
-      data: [{ id: 'org' }],
-      links: { next: 'https://api.rd.services/api/v2/organizations?page[number]=2&page[size]=25&sort[created_at]=asc' },
-    })));
-    const result = await new RdClient(v2, save, fetcher).list('organizations', 1);
+    fetcher.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [{ id: 'org' }],
+          links: {
+            next: 'https://api.rd.services/api/v2/organizations?page[number]=2&page[size]=25&sort[created_at]=asc',
+          },
+        }),
+      ),
+    );
+    const result = await new RdClient(v2, save, fetcher).list(
+      'organizations',
+      1,
+    );
     expect(new URL(result.next!).pathname).toBe('/crm/v2/organizations');
     expect(result.hasMore).toBe(true);
   });
   it('rejects aliases that repeat the current cursor after normalization', async () => {
-    fetcher.mockResolvedValue(new Response(JSON.stringify({
-      data: [{ id: 'org' }],
-      links: { next: '/api/v2/organizations?sort[created_at]=asc&page[size]=25&page[number]=1' },
-    })));
-    await expect(new RdClient(v2, save, fetcher).list('organizations', 1))
-      .rejects.toThrow('repeated pagination cursor');
+    fetcher.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [{ id: 'org' }],
+          links: {
+            next: '/api/v2/organizations?sort[created_at]=asc&page[size]=25&page[number]=1',
+          },
+        }),
+      ),
+    );
+    await expect(
+      new RdClient(v2, save, fetcher).list('organizations', 1),
+    ).rejects.toThrow('repeated pagination cursor');
   });
   it('rejects a response link to another resource before persisting it', async () => {
-    fetcher.mockResolvedValue(new Response(JSON.stringify({
-      data: [{ id: 'org' }], links: { next: '/api/v2/contacts?page[number]=2' },
-    })));
-    await expect(new RdClient(v2, save, fetcher).list('organizations', 1))
-      .rejects.toThrow('Unsafe');
+    fetcher.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [{ id: 'org' }],
+          links: { next: '/api/v2/contacts?page[number]=2' },
+        }),
+      ),
+    );
+    await expect(
+      new RdClient(v2, save, fetcher).list('organizations', 1),
+    ).rejects.toThrow('Unsafe');
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('bounded recent-first filters', () => {
+  const upper = '2026-10-24T00:00:00.000Z';
+  it('requests descending dates bounded by a stable cutoff', async () => {
+    fetcher.mockResolvedValue(new Response('{"data":[],"links":{}}'));
+    await new RdClient(v2, save, fetcher).list(
+      'organizations',
+      1,
+      null,
+      false,
+      { sort: 'created_at', upper },
+    );
+    const url = new URL(String(fetcher.mock.calls[0][0]));
+    expect(url.searchParams.get('sort[created_at]')).toBe('desc');
+    expect(url.searchParams.get('filter')).toBe(`created_at:<=\"${upper}\"`);
+  });
+  it('combines the frozen sample ID filter with its cutoff', async () => {
+    fetcher.mockResolvedValue(new Response('{"data":[],"links":{}}'));
+    await new RdClient(v2, save, fetcher).list(
+      'deals?filter=id:(one,two)',
+      1,
+      null,
+      false,
+      { sort: 'created_at', upper },
+    );
+    expect(
+      new URL(String(fetcher.mock.calls[0][0])).searchParams.get('filter'),
+    ).toBe(`(id:(one,two)) created_at:<=\"${upper}\"`);
+  });
+  it('refuses a next link that silently drops or expands the date filter', async () => {
+    fetcher.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [],
+          links: { next: '/crm/v2/deals?page[number]=2&sort[created_at]=desc' },
+        }),
+      ),
+    );
+    await expect(
+      new RdClient(v2, save, fetcher).list('deals', 1, null, false, {
+        sort: 'created_at',
+        upper,
+      }),
+    ).rejects.toThrow('Unsafe pagination filter');
+  });
+  it('validates saved cursors before requesting them and does not grow filters on recovery', async () => {
+    const params = new URLSearchParams({
+      'page[number]': '2',
+      'page[size]': '25',
+      'sort[created_at]': 'desc',
+      filter: `created_at:<=\"${upper}\"`,
+    });
+    fetcher.mockResolvedValue(new Response('{"data":[],"links":{}}'));
+    await new RdClient(v2, save, fetcher).list(
+      'deals',
+      2,
+      `https://api.rd.services/api/v2/deals?${params}`,
+      false,
+      { sort: 'created_at', upper },
+    );
+    expect(
+      new URL(String(fetcher.mock.calls[0][0])).searchParams.get('filter'),
+    ).toBe(`created_at:<=\"${upper}\"`);
+    fetcher.mockClear();
+    await expect(
+      new RdClient(v2, save, fetcher).list(
+        'deals',
+        2,
+        'https://api.rd.services/crm/v2/deals?page[number]=2',
+        false,
+        { sort: 'created_at', upper },
+      ),
+    ).rejects.toThrow('Unsafe pagination filter');
+    expect(fetcher).not.toHaveBeenCalled();
   });
 });

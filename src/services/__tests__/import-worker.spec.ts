@@ -212,3 +212,91 @@ describe('bounded dashboard telemetry', () => {
     expect(state.created).toBe(0);
   });
 });
+
+describe('recent sample and complete date windows', () => {
+  const recent = () => ({
+    ...initial(),
+    version: 'v2' as const,
+    dryRun: true,
+    resourceIndex: 0,
+    plan: ['deals'],
+    selection: {
+      scope: 'sample' as const,
+      limit: 25,
+      cutoff: '2026-10-24T00:00:00Z',
+      selectedDeals: [] as string[],
+    },
+  });
+  const credentials = () => {
+    process.env.RD_CREDENTIALS = JSON.stringify({
+      version: 'v2',
+      accountKey: 'acme',
+      accessToken: 'x',
+      refreshToken: 'r',
+      clientId: 'c',
+      clientSecret: 's',
+    });
+  };
+  const records = () =>
+    Array.from({ length: 25 }, (_, index) => ({
+      id: `deal-${index}`,
+      created_at: new Date(
+        Date.UTC(2026, 9, 23, 0, 0, 25 - index),
+      ).toISOString(),
+    }));
+  it('stores exactly the recent selection and never follows the rest of the list', async () => {
+    credentials();
+    const { worker, state, importer } = setup(recent());
+    mocks.list.mockResolvedValue({
+      records: records(),
+      hasMore: true,
+      next: 'older',
+    });
+    await worker.run({});
+    expect(state.selection!.selectedDeals).toHaveLength(25);
+    expect(state.counts.deals).toBe(25);
+    expect(state.resourceIndex).toBe(1);
+    expect(state.nextPath).toBeNull();
+    expect(importer.import).toHaveBeenCalledTimes(25);
+  });
+  it('preserves the complete sample page when resuming from a partial offset', async () => {
+    credentials();
+    const current = recent();
+    current.recordOffset = 10;
+    current.counts.deals = 10;
+    current.processed = 10;
+    const { worker, state, importer } = setup(current);
+    mocks.list.mockResolvedValue({
+      records: records(),
+      hasMore: true,
+      next: 'older',
+    });
+    await worker.run({});
+    expect(importer.import).toHaveBeenCalledTimes(15);
+    expect(state.counts.deals).toBe(25);
+    expect(state.resourceIndex).toBe(1);
+  });
+  it('starts a new overlapping window before requesting the 10,000-record boundary', async () => {
+    credentials();
+    const current: ImportState = recent();
+    current.dryRun = false;
+    current.selection!.scope = 'all';
+    current.page = 399;
+    const { worker, state } = setup(current);
+    mocks.list.mockResolvedValue({
+      records: records(),
+      hasMore: true,
+      next: 'page-400',
+    });
+    await worker.run({});
+    expect(state.page).toBe(1);
+    expect(state.nextPath).toBeNull();
+    expect(state.selection!.upper).toBe(records()[24].created_at);
+    expect(state.resourceIndex).toBe(0);
+  });
+  it('discards an old command after the user changes import scope', async () => {
+    const { worker } = setup(recent());
+    await worker.run({ runId: 'old-migration' });
+    expect(mocks.list).not.toHaveBeenCalled();
+  });
+});

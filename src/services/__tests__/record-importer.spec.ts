@@ -218,3 +218,252 @@ describe('native pipeline imports', () => {
     ).toBe(false);
   });
 });
+
+describe('repeated imports against persisted destination state', () => {
+  type Row = { id: string; [key: string]: unknown };
+  type Request = Record<
+    string,
+    {
+      __args: {
+        id?: string;
+        data?: Row;
+        filter?: {
+          id?: { eq: string };
+          emails?: { primaryEmail: { eq: string } };
+        };
+      };
+    }
+  >;
+  const memoryApi = () => {
+    const tables = new Map<string, Map<string, Row>>();
+    const table = (name: string) => {
+      let rows = tables.get(name);
+      if (!rows) {
+        rows = new Map();
+        tables.set(name, rows);
+      }
+      return rows;
+    };
+    const creates: Record<string, string> = {
+      createRdSourceRecord: 'rdSourceRecords',
+      createCompany: 'companies',
+      createPerson: 'people',
+      createOpportunity: 'opportunities',
+      createTask: 'tasks',
+      createNote: 'notes',
+      createTaskTarget: 'taskTargets',
+      createNoteTarget: 'noteTargets',
+    };
+    const read = vi.fn(async (request: Request) => {
+      const [name, selection] = Object.entries(request)[0];
+      const filter = selection.__args.filter;
+      const rows = [...table(name).values()].filter((row) => {
+        if (filter?.id) return row.id === filter.id.eq;
+        if (filter?.emails) {
+          const emails = row.emails as { primaryEmail?: string } | undefined;
+          return emails?.primaryEmail === filter.emails.primaryEmail.eq;
+        }
+        throw new Error('Unexpected test query.');
+      });
+      return {
+        [name]: {
+          edges: rows.map((node) => ({ node: structuredClone(node) })),
+        },
+      };
+    });
+    const write = vi.fn(async (request: Request) => {
+      const [name, selection] = Object.entries(request)[0];
+      const { data, id } = selection.__args;
+      if (name === 'updateRdSourceRecord') {
+        const row = table('rdSourceRecords').get(id!);
+        if (!row) throw new Error('Missing test archive.');
+        Object.assign(row, structuredClone(data));
+        return { [name]: { id } };
+      }
+      const destination = creates[name];
+      if (!destination || !data) throw new Error('Unexpected test mutation.');
+      const rows = table(destination);
+      // Model the database primary-key guard as well as the pre-create lookup.
+      if (rows.has(data.id)) throw new Error('Duplicate primary key.');
+      rows.set(data.id, structuredClone(data));
+      return { [name]: { id: data.id } };
+    });
+    return {
+      table,
+      read,
+      write,
+      client: { query: read, mutation: write } as unknown as CoreApiClient,
+    };
+  };
+
+  it.each([
+    ['organizations', 'companies'],
+    ['contacts', 'people'],
+    ['deals', 'opportunities'],
+    ['tasks', 'tasks'],
+    ['activities', 'notes'],
+  ])(
+    'skips the same %s ID across run IDs and preserves local edits',
+    async (kind, destination) => {
+      const api = memoryApi();
+      const record = {
+        id: 'source-1',
+        name: 'RD name',
+        subject: 'RD task',
+        text: 'RD note',
+      };
+      expect(
+        await new RecordImporter(api.client).import(
+          kind,
+          record,
+          'acme',
+          'first-run',
+          false,
+        ),
+      ).toBe('created');
+      const row = [...api.table(destination).values()][0];
+      Object.assign(row, {
+        name: 'Edited in Twenty',
+        dealStatus: 'PAUSED',
+        title: 'Local title',
+      });
+      const before = structuredClone(row);
+      api.write.mockClear();
+
+      for (const runId of ['second-run', 'third-run']) {
+        expect(
+          await new RecordImporter(api.client).import(
+            kind,
+            { ...record, name: 'New RD name' },
+            'acme',
+            runId,
+            false,
+          ),
+        ).toBe('skipped');
+      }
+      expect(api.table(destination).size).toBe(1);
+      expect(api.table('rdSourceRecords').size).toBe(1);
+      expect([...api.table(destination).values()]).toEqual([before]);
+      expect(api.write).not.toHaveBeenCalled();
+    },
+  );
+
+  it('recovers a native creation whose archive completion failed without duplicating or overwriting it', async () => {
+    const api = memoryApi();
+    const write = api.write.getMockImplementation()!;
+    let failCompletion = true;
+    api.write.mockImplementation(async (request) => {
+      if (request.updateRdSourceRecord && failCompletion) {
+        failCompletion = false;
+        throw new Error('Interrupted before archive completion.');
+      }
+      return write(request);
+    });
+    const record = { id: 'source-1', name: 'RD name' };
+    await expect(
+      new RecordImporter(api.client).import(
+        'organizations',
+        record,
+        'acme',
+        'first-run',
+        false,
+      ),
+    ).rejects.toThrow('Interrupted');
+    const row = [...api.table('companies').values()][0];
+    row.name = 'Edited after interruption';
+
+    expect(
+      await new RecordImporter(api.client).import(
+        'organizations',
+        record,
+        'acme',
+        'retry-run',
+        false,
+      ),
+    ).toBe('skipped');
+    expect(api.table('companies').size).toBe(1);
+    expect(row.name).toBe('Edited after interruption');
+    expect([...api.table('rdSourceRecords').values()][0].targetId).toBe(row.id);
+  });
+
+  it('allows only one destination record when two imports race, then safely skips the retry', async () => {
+    const api = memoryApi();
+    const record = { id: 'source-1', name: 'RD name' };
+    const attempts = await Promise.allSettled(
+      ['first-run', 'second-run'].map((runId) =>
+        new RecordImporter(api.client).import(
+          'organizations',
+          record,
+          'acme',
+          runId,
+          false,
+        ),
+      ),
+    );
+    expect(
+      attempts.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      attempts.filter((result) => result.status === 'rejected'),
+    ).toHaveLength(1);
+    expect(api.table('companies').size).toBe(1);
+    expect(api.table('rdSourceRecords').size).toBe(1);
+    expect(
+      await new RecordImporter(api.client).import(
+        'organizations',
+        record,
+        'acme',
+        'retry-run',
+        false,
+      ),
+    ).toBe('skipped');
+  });
+
+  it('keeps distinct RD IDs and source companies separate even when names match', async () => {
+    const api = memoryApi();
+    for (const [account, id] of [
+      ['acme', 'one'],
+      ['acme', 'two'],
+      ['other-company', 'one'],
+    ]) {
+      await new RecordImporter(api.client).import(
+        'organizations',
+        { id, name: 'Same name' },
+        account,
+        'run',
+        false,
+      );
+    }
+    expect(api.table('companies').size).toBe(3);
+    expect(api.table('rdSourceRecords').size).toBe(3);
+  });
+
+  it('stops on a primary-email conflict before creating or merging a second contact', async () => {
+    const api = memoryApi();
+    const record = {
+      id: 'one',
+      name: 'First contact',
+      emails: ['same@example.invalid'],
+    };
+    await new RecordImporter(api.client).import(
+      'contacts',
+      record,
+      'acme',
+      'first-run',
+      false,
+    );
+    api.write.mockClear();
+    await expect(
+      new RecordImporter(api.client).import(
+        'contacts',
+        { ...record, id: 'two', name: 'Different contact' },
+        'acme',
+        'second-run',
+        false,
+      ),
+    ).rejects.toThrow('RD_CONTACT_EMAIL_CONFLICT');
+    expect(api.table('people').size).toBe(1);
+    expect(api.table('rdSourceRecords').size).toBe(1);
+    expect(api.write).not.toHaveBeenCalled();
+  });
+});

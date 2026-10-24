@@ -410,6 +410,30 @@ export const ImportOverview = ({
             )}
           </section>
           <ImportResourceTable model={model} state={state} />
+          {sample && (
+            <section className="ri-card" aria-label="Vínculos da amostra">
+              <h3>Vínculos verificados junto das negociações</h3>
+              <div className="ri-facts" style={{ marginTop: 16 }}>
+                <div className="ri-fact">
+                  <span className="ri-muted">Empresas relacionadas</span>
+                  <strong>{number(state?.counts.organizations)}</strong>
+                </div>
+                <div className="ri-fact">
+                  <span className="ri-muted">Contatos relacionados</span>
+                  <strong>{number(state?.counts.contacts)}</strong>
+                </div>
+                <div className="ri-fact">
+                  <span className="ri-muted">Tarefas da amostra</span>
+                  <strong>{number(state?.counts.tasks)}</strong>
+                </div>
+              </div>
+              <p className="ri-fine-print" style={{ marginTop: 12 }}>
+                Empresas e contatos são consultados por ID para preservar as
+                relações, mesmo quando foram criados antes das negociações. As
+                tarefas são trazidas na criação da amostra.
+              </p>
+            </section>
+          )}
         </div>
         <aside className="ri-stack">
           <section className="ri-card">

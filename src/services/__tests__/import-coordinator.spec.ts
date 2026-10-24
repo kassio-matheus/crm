@@ -114,6 +114,36 @@ describe('ImportCoordinator', () => {
     await new ImportCoordinator().control('resume');
     expect(mocks.enqueue).not.toHaveBeenCalled();
   });
+  it('does not restart a completed live migration on repeated start, simulate or resume commands', async () => {
+    const completed = {
+      ...state(),
+      dryRun: false,
+      status: 'COMPLETED' as const,
+      phase: 'done' as const,
+    };
+    mocks.query.mockResolvedValue({
+      rdSourceRecords: { edges: [{ node: { sourcePayload: completed } }] },
+    });
+    for (const action of ['start', 'simulate', 'resume'] as const)
+      expect(await new ImportCoordinator().control(action)).toEqual(completed);
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+    expect(mocks.mutation).not.toHaveBeenCalled();
+  });
+  it('rejects a changed company key before another migration can be queued', async () => {
+    mocks.query.mockResolvedValue({
+      rdSourceRecords: { edges: [{ node: { sourcePayload: state() } }] },
+    });
+    process.env.RD_CREDENTIALS = JSON.stringify({
+      version: 'v1',
+      accountKey: 'another-company',
+      accessToken: 'SECRET',
+    });
+    await expect(new ImportCoordinator().control('simulate')).rejects.toThrow(
+      'another company',
+    );
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+    expect(mocks.mutation).not.toHaveBeenCalled();
+  });
   it('requests pause without modifying a running checkpoint', async () => {
     await new ImportCoordinator().control('pause');
     expect(mocks.set).toHaveBeenCalledWith('rd:pause', true);

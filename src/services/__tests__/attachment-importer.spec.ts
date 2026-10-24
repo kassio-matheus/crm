@@ -39,6 +39,18 @@ beforeEach(() => {
   uploader.mockResolvedValue(new Response('{}'));
 });
 describe('AttachmentImporter', () => {
+  it('skips an existing attachment before downloading or uploading another copy', async () => {
+    query.mockResolvedValue({
+      attachments: { edges: [{ node: { id: 'existing-file' } }] },
+    });
+    expect(
+      await build().import({ name: 'Same file' }, 'existing-file', 'deal'),
+    ).toBe(false);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(uploader).not.toHaveBeenCalled();
+    expect(metadataMutation).not.toHaveBeenCalled();
+    expect(mutation).not.toHaveBeenCalled();
+  });
   it.each([
     'http://localhost/file',
     'https://127.0.0.1/file',

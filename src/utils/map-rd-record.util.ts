@@ -85,6 +85,19 @@ export const mapRdRecord = (
         pipeline._id,
     );
     const stageId = text(record.stage_id ?? stage.id ?? stage._id);
+    const money = (value: unknown) => {
+      if (value === null || value === undefined) return null;
+      if (
+        typeof value !== 'number' ||
+        !Number.isFinite(value) ||
+        !Number.isSafeInteger(Math.round(value * 1_000_000))
+      )
+        throw new Error('Invalid source deal amount.');
+      return {
+        amountMicros: String(Math.round(value * 1_000_000)),
+        currencyCode: 'BRL',
+      };
+    };
     return {
       ...common,
       name: text(record.name),
@@ -94,6 +107,12 @@ export const mapRdRecord = (
       },
       closeDate: date(record.expected_close_date ?? record.prediction_date),
       rdCreatedAt: date(record.created_at),
+      rdUpdatedAt: date(record.updated_at),
+      rdSourceRecordId: text(record.id ?? record._id),
+      rdCampaignId: text(record.campaign_id),
+      rdLeadSourceId: text(record.source_id),
+      rdOneTimeAmount: money(record.one_time_price),
+      rdRecurringAmount: money(record.recurrence_price),
       lastContactAt: date(record.last_activity_at),
       dealStatus: dealStatus(record),
       qualification: typeof record.rating === 'number' ? record.rating : 0,

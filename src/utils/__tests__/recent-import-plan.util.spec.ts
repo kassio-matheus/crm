@@ -5,6 +5,7 @@ it('limits sample discovery to catalogs and recent deals', () => {
     'pipelines',
     'users',
     'teams',
+    'custom_fields',
     'deals',
   ]);
 });

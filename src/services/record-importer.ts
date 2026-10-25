@@ -1,5 +1,8 @@
+import type { RdCustomField } from 'src/types/rd-custom-field';
 import type { ImportOwnerMatch } from 'src/types/import-owner-match';
 import { CoreApiClient, type CoreSchema } from 'twenty-client-sdk/core';
+import { ImportCustomFields } from 'src/services/import-custom-fields';
+import { ImportDealEnrichment } from 'src/services/import-deal-enrichment';
 import { ImportOwners } from 'src/services/import-owners';
 import { AttachmentImporter } from 'src/services/attachment-importer';
 import { NativePipelineViews } from 'src/services/native-pipeline-views';
@@ -10,15 +13,22 @@ import { sanitizeSource } from 'src/utils/sanitize-source.util';
 /** Create-only data import; replay may fill an empty native owner with an exact member match. */
 export class RecordImporter {
   private owners: ImportOwners;
+  private customFields: ImportCustomFields;
   constructor(
     private client = new CoreApiClient(),
     private views = new NativePipelineViews(),
   ) {
     this.owners = new ImportOwners(this.client);
+    this.customFields = new ImportCustomFields(this.client);
   }
 
   withOwnerCatalog(catalog: Record<string, ImportOwnerMatch>): this {
     this.owners = new ImportOwners(this.client, catalog);
+    return this;
+  }
+
+  withCustomCatalog(catalog: RdCustomField[]): this {
+    this.customFields.withCatalog(catalog);
     return this;
   }
 
@@ -48,7 +58,11 @@ export class RecordImporter {
     if (!externalId) throw new Error(`Missing source ID for ${kind}.`);
     const key = `${account}:${kind}:${kind.startsWith('deal-') ? `${parentId}:` : ''}${externalId}`;
     // Validate projected values even during simulation.
-    const data = mapRdRecord(kind, record, key);
+    const custom =
+      kind === 'deals'
+        ? await this.customFields.project(record, account, dryRun)
+        : {};
+    const data = { ...mapRdRecord(kind, record, key), ...custom };
     if (kind === 'contacts') {
       const email = (data.emails as { primaryEmail?: string } | undefined)
         ?.primaryEmail;
@@ -83,6 +97,28 @@ export class RecordImporter {
       archive.rdSourceRecords!.edges[0]?.node.targetId &&
       !['pipelines', 'stages'].includes(kind)
     ) {
+      if (kind === 'custom_fields')
+        await this.client.mutation({
+          updateRdSourceRecord: {
+            __args: {
+              id: archiveId,
+              data: {
+                sourcePayload: sanitizeSource(record) as Record<
+                  string,
+                  unknown
+                >,
+              },
+            },
+            id: true,
+          },
+        });
+      if (
+        kind === 'deals' &&
+        archive.rdSourceRecords!.edges[0]?.node.targetId === id
+      ) {
+        await this.customFields.fillMissing(key, custom);
+        await new ImportDealEnrichment(this.client).fillMissing(key, data);
+      }
       if (
         archive.rdSourceRecords!.edges[0]?.node.targetId === id &&
         owner?.memberId
@@ -382,6 +418,10 @@ export class RecordImporter {
             });
         }
       }
+    }
+    if (!created && kind === 'deals') {
+      await this.customFields.fillMissing(key, custom);
+      await new ImportDealEnrichment(this.client).fillMissing(key, data);
     }
     if (!created && owner?.memberId)
       await this.owners.fillMissing(kind, key, owner.memberId);

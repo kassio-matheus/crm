@@ -131,10 +131,15 @@ export class ImportCoordinator {
         throw new Error(
           'Only records owned by the recent sample can be removed.',
         );
-      if (state.preview.status === 'REMOVED') return state;
+      if (state.preview.status === 'REMOVED' && state.preview.viewsChecked)
+        return state;
       state = {
         ...state,
-        maintenance: 'cleanup',
+        maintenance:
+          state.preview.status === 'REMOVED' ||
+          state.maintenance === 'cleanupViews'
+            ? 'cleanupViews'
+            : 'cleanup',
         status: 'READY',
         error: null,
         revision: state.revision + 1,

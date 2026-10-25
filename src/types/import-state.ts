@@ -1,6 +1,7 @@
 import type { ImportActivity } from 'src/types/import-activity';
 import type { ImportSelection } from 'src/types/import-selection';
 import type { ImportPreview } from 'src/types/import-preview';
+import type { RdCustomField } from 'src/types/rd-custom-field';
 import type { ImportOwnerMatch } from 'src/types/import-owner-match';
 export type ImportState = {
   id: string;
@@ -38,6 +39,7 @@ export type ImportState = {
   plan?: string[];
   selection?: ImportSelection;
   preview?: ImportPreview;
-  maintenance?: 'cleanup' | 'restore';
+  maintenance?: 'cleanup' | 'cleanupViews' | 'restore';
   owners?: Record<string, ImportOwnerMatch>;
+  customFields?: Record<string, RdCustomField>;
 };

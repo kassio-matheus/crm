@@ -307,3 +307,37 @@ it('reuses a native field created by the queued pipeline event while import is p
   await service.ensure('pipeline', 'Vendas');
   expect(mutation).toHaveBeenCalledTimes(1);
 });
+
+it('hides every native unassigned placeholder after a view restore', async () => {
+  query
+    .mockResolvedValueOnce({
+      objects: { edges: [{ node: { id: 'opportunity', fieldsList: fields } }] },
+    })
+    .mockResolvedValueOnce({
+      getViews: [
+        {
+          id: 'pipeline',
+          name: 'Vendas',
+          type: 'KANBAN',
+          icon: 'IconLock',
+          mainGroupByFieldMetadataId: 'salesStage',
+          shouldHideEmptyGroups: false,
+        },
+      ],
+    })
+    .mockResolvedValueOnce({
+      getViewFields: fields.map((f) => ({ fieldMetadataId: f.id })),
+      getViewFilters: [{ fieldMetadataId: 'salesPipeline' }],
+      getViewSorts: [{ fieldMetadataId: 'rdCreatedAt' }],
+      getViewGroups: [
+        { id: 'one', fieldValue: '', isVisible: true },
+        { id: 'two', fieldValue: '', isVisible: true },
+      ],
+    });
+  await service.ensure('pipeline', 'Vendas');
+  expect(
+    mutation.mock.calls
+      .filter(([r]) => r.updateViewGroup)
+      .map(([r]) => r.updateViewGroup.__args.input.id),
+  ).toEqual(['one', 'two']);
+});

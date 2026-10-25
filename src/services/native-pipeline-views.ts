@@ -354,17 +354,16 @@ export class NativePipelineViews {
     groups: { id: string; fieldValue: string; isVisible: boolean }[],
   ) {
     // Only actual stages are board columns. Unassigned deals stay available in the native list.
-    const unassigned = groups.find((g) => !g.fieldValue);
-    if (unassigned?.isVisible)
-      await this.metadata.mutation({
-        updateViewGroup: {
-          __args: {
-            input: { id: unassigned.id, update: { isVisible: false } },
+    const unassigned = groups.filter((g) => !g.fieldValue);
+    for (const group of unassigned)
+      if (group.isVisible)
+        await this.metadata.mutation({
+          updateViewGroup: {
+            __args: { input: { id: group.id, update: { isVisible: false } } },
+            id: true,
           },
-          id: true,
-        },
-      });
-    else if (!unassigned)
+        });
+    if (!unassigned.length)
       await this.createOnce(
         () =>
           this.metadata.mutation({

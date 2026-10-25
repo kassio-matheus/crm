@@ -3,4 +3,6 @@ export type ImportPreview = {
   status: 'AVAILABLE' | 'CLEANING' | 'REMOVED' | 'PROMOTED';
   owned: number;
   removed: number;
+  viewsRemoved?: number;
+  viewsChecked?: boolean;
 };

@@ -368,3 +368,30 @@ it('allows enlarging a completed native sample without losing its deletion recei
   });
   expect(mocks.enqueue).toHaveBeenCalledTimes(1);
 });
+
+it('repairs orphaned sample views without scheduling another native cleanup', async () => {
+  const previous = {
+    ...state(),
+    dryRun: false,
+    status: 'COMPLETED' as const,
+    selection: {
+      scope: 'sample' as const,
+      limit: 125,
+      cutoff: '',
+      selectedDeals: [],
+    },
+    preview: {
+      runId: 'preview',
+      status: 'REMOVED' as const,
+      owned: 293,
+      removed: 293,
+    },
+  };
+  mocks.query.mockResolvedValue({
+    rdSourceRecords: { edges: [{ node: { sourcePayload: previous } }] },
+  });
+  expect(await new ImportCoordinator().control('cleanup')).toMatchObject({
+    maintenance: 'cleanupViews',
+    preview: { status: 'CLEANING', removed: 293 },
+  });
+});

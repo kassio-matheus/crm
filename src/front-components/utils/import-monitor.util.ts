@@ -191,7 +191,9 @@ export class ImportMonitor {
       (!state?.preview ||
         state.selection?.scope !== 'sample' ||
         ['RUNNING', 'READY'].includes(state.status) ||
-        ['REMOVED', 'PROMOTED'].includes(state.preview.status))
+        state.preview.status === 'PROMOTED' ||
+        (state.preview.status === 'REMOVED' &&
+          Boolean(state.preview.viewsChecked)))
     )
       return false;
     if (

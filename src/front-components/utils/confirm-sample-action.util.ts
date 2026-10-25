@@ -11,7 +11,9 @@ export const confirmSampleAction = async (
   if (
     action === 'cleanup' &&
     (!state.preview ||
-      ['PROMOTED', 'REMOVED'].includes(state.preview.status) ||
+      state.preview.status === 'PROMOTED' ||
+      (state.preview.status === 'REMOVED' &&
+        Boolean(state.preview.viewsChecked)) ||
       ['RUNNING', 'READY'].includes(state.status))
   )
     return false;
@@ -27,7 +29,7 @@ export const confirmSampleAction = async (
         : {
             title: 'Excluir somente os dados da amostra?',
             subtitle:
-              'Os registros operacionais criados por este teste, incluindo alterações feitas neles, serão enviados à lixeira do Twenty. Registros que já existiam serão preservados. A exclusão será bloqueada se novos registros fora da amostra dependerem desses dados. O histórico técnico de origem será mantido. Nenhum dado será excluído no RD.',
+              'Os registros operacionais criados por este teste, incluindo alterações feitas neles, serão enviados à lixeira do Twenty. Registros que já existiam serão preservados. A exclusão será bloqueada se novos registros fora da amostra dependerem desses dados. As visualizações de funil criadas pela amostra serão removidas, com sua configuração guardada para restauração. Visualizações preexistentes serão preservadas. O histórico técnico de origem será mantido. Nenhum dado será excluído no RD.',
             confirmButtonText: 'Excluir dados da amostra',
             confirmButtonAccent: 'danger',
           },

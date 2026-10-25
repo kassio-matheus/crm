@@ -120,3 +120,24 @@ describe('native pipeline catalog mapping', () => {
       'stage order',
     ));
 });
+
+it('projects the v2 JSON references, update timestamp and both price components without dropping the original', () => {
+  const record = {
+    id: 'rd-id',
+    updated_at: '2026-10-20T13:12:09.469-03:00',
+    source_id: 'source',
+    campaign_id: 'campaign',
+    one_time_price: 0,
+    recurrence_price: 12.5,
+    custom_fields: { question: '' },
+  };
+  expect(mapRdRecord('deals', record, 'a:deals:rd-id')).toMatchObject({
+    rdSourceRecordId: 'rd-id',
+    rdUpdatedAt: '2026-10-20T16:12:09.469Z',
+    rdLeadSourceId: 'source',
+    rdCampaignId: 'campaign',
+    rdOneTimeAmount: { amountMicros: '0', currencyCode: 'BRL' },
+    rdRecurringAmount: { amountMicros: '12500000', currencyCode: 'BRL' },
+    rdOriginalData: record,
+  });
+});

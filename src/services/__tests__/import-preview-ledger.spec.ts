@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest';
 import type { CoreApiClient } from 'twenty-client-sdk/core';
 import { ImportPreviewLedger } from '../import-preview-ledger';
 import { sourceId } from 'src/utils/source-id.util';
+import type { ImportPreviewViews } from '../import-preview-views';
 import type { PreviewOwnedRecord } from 'src/types/preview-owned-record';
 const setup = (owned: PreviewOwnedRecord[] = []) => {
   const rows = owned.map((item) => ({
@@ -146,4 +147,37 @@ it('resumes cleanup after a previous soft delete without issuing another deletio
   expect(
     test.mutation.mock.calls.some(([request]) => 'deleteCompany' in request),
   ).toBe(false);
+});
+
+it('repairs views of an already removed sample without deleting or restoring any native record', async () => {
+  const owned = {
+    table: 'salesPipelines',
+    id: sourceId('acme:pipelines:p'),
+    key: 'acme:pipelines:p',
+    deleted: true,
+  };
+  const t = setup([owned]);
+  t.active.clear();
+  const views = {
+    prepare: vi.fn(),
+    cleanup: vi.fn().mockResolvedValue(1),
+    restore: vi.fn(),
+  };
+  const core = {
+    query: t.query,
+    mutation: t.mutation,
+  } as unknown as CoreApiClient;
+  const ledger = new ImportPreviewLedger(
+    'run',
+    'acme',
+    core,
+    views as unknown as ImportPreviewViews,
+  );
+  expect(await ledger.cleanupViews()).toBe(1);
+  expect(t.mutation).not.toHaveBeenCalled();
+  expect(views.cleanup).toHaveBeenCalledWith([owned]);
+  t.active.add(owned.id);
+  await expect(ledger.cleanupViews()).rejects.toThrow(
+    'RD_PREVIEW_PIPELINE_RESTORED',
+  );
 });

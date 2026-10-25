@@ -158,13 +158,17 @@ export const ImportOverview = ({
                 pending ||
                 running ||
                 !sample ||
-                ['REMOVED', 'PROMOTED'].includes(state.preview.status)
+                state.preview.status === 'PROMOTED' ||
+                (state.preview.status === 'REMOVED' &&
+                  Boolean(state.preview.viewsChecked))
               }
               startIcon={<IconTrash size={15} />}
               onClick={() => onAction('cleanup')}
             >
               {state.preview.status === 'REMOVED'
-                ? 'Amostra excluída'
+                ? state.preview.viewsChecked
+                  ? 'Amostra excluída'
+                  : 'Concluir limpeza da amostra'
                 : state.preview.status === 'PROMOTED'
                   ? 'Amostra incorporada à base'
                   : 'Excluir dados da amostra'}
@@ -185,6 +189,8 @@ export const ImportOverview = ({
             {state.preview.removed.toLocaleString('pt-BR')} enviados à lixeira.
             Registros anteriores são preservados; o histórico técnico é mantido.
             Na importação completa, a amostra é reaproveitada sem duplicações.
+            Visualizações dos funis removidas: {state.preview.viewsRemoved ?? 0}
+            .
           </p>
         )}
         {state?.status === 'COMPLETED' && (state.dryRun || sample) && (

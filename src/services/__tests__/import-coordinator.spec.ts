@@ -395,3 +395,31 @@ it('repairs orphaned sample views without scheduling another native cleanup', as
     preview: { status: 'CLEANING', removed: 293 },
   });
 });
+
+it('refuses view-only repair for an active native sample instead of deleting business records', async () => {
+  const current = {
+    ...state(),
+    dryRun: false,
+    status: 'COMPLETED' as const,
+    selection: {
+      scope: 'sample' as const,
+      limit: 125,
+      cutoff: '',
+      selectedDeals: [],
+    },
+    preview: {
+      runId: 'preview',
+      status: 'AVAILABLE' as const,
+      owned: 293,
+      removed: 0,
+    },
+  };
+  mocks.query.mockResolvedValue({
+    rdSourceRecords: { edges: [{ node: { sourcePayload: current } }] },
+  });
+  await expect(new ImportCoordinator().control('cleanupViews')).rejects.toThrow(
+    'RD_SAMPLE_NOT_REMOVED',
+  );
+  expect(mocks.enqueue).not.toHaveBeenCalled();
+  expect(mocks.mutation).not.toHaveBeenCalled();
+});

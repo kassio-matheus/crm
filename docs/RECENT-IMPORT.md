@@ -80,3 +80,11 @@ Visualizações preexistentes e aliases criados pelo usuário são preservados. 
 Se a amostra já aparece como excluída, **Concluir limpeza da amostra** executa apenas a correção das visualizações remanescentes. Não exclui nem restaura registros operacionais novamente. Um funil da amostra restaurado manualmente bloqueia essa correção para revisão. O painel registra a quantidade de visualizações removidas. Depois da correção, a opção fica desativada.
 
 A restauração mantém as colunas das etapas e oculta os placeholders de itens sem etapa que o próprio Twenty pode criar ao reconstruir o Kanban. Campos personalizados são estrutura compartilhada e não são removidos junto da amostra.
+
+### Verificação final da limpeza
+
+O teste de integração passou também pelo reparo de uma visualização órfã com o funil já na lixeira: o worker concluiu com zero requisições ao RD e manteve o funil inativo. A execução tem despacho explícito para `cleanup`, `cleanupViews` e `restore`; operações desconhecidas falham sem restaurar registros.
+
+Na correção de produção, um primeiro caminho de manutenção reativou temporariamente a amostra. A rota foi corrigida e ganhou testes unitários e de integração. Os 293 registros do grupo foram devolvidos à lixeira, as seis visualizações canônicas foram removidas e as consultas finais confirmaram zero empresas, pessoas, negociações, funis e etapas importados ativos. As duas visualizações gerais do Kanban foram preservadas. Nenhuma alteração foi enviada aos dados do RD.
+
+A validação final teve 389 testes unitários, os testes de integração de personalizados e de exclusão/restauração de visualizações, typecheck e lint sem erros. Nenhuma importação completa foi iniciada.

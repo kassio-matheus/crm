@@ -60,6 +60,7 @@ export default defineApplicationRole({
   ],
   permissionFlagUniversalIdentifiers: [
     SystemPermissionFlag.APPLICATIONS,
+    SystemPermissionFlag.DATA_MODEL,
     SystemPermissionFlag.VIEWS,
     SystemPermissionFlag.AI,
     SystemPermissionFlag.UPLOAD_FILE,

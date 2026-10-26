@@ -478,6 +478,14 @@ describe('owner association on record replay', () => {
     async (kind, operation, field) => {
       const key = `acme:${kind}:existing`;
       query.mockImplementation(async (request) => {
+        if (request.opportunities)
+          return {
+            opportunities: {
+              edges: [
+                { node: { id: sourceId(key), rdSourceRecordId: 'existing' } },
+              ],
+            },
+          };
         if (request.workspaceMembers)
           return {
             workspaceMembers: {

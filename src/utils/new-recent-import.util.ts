@@ -69,6 +69,8 @@ export const newRecentImport = (
                   ...previous.preview,
                   status: 'AVAILABLE',
                   removed: 0,
+                  viewsRemoved: 0,
+                  viewsChecked: false,
                 },
                 maintenance: 'restore',
               }

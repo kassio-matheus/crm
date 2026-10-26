@@ -25,3 +25,8 @@ describe('rd-import handler', () => {
     expect(control).toHaveBeenCalledWith('status');
   });
 });
+
+it('supports an explicit view-only repair command for already removed samples', async () => {
+  await definition.config.handler({ action: 'cleanupViews' }, context);
+  expect(control).toHaveBeenCalledWith('cleanupViews');
+});

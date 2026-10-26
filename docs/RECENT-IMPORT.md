@@ -3,8 +3,8 @@
 ## Fluxo da página
 
 1. **Simular dados recentes:** lê até 125 negociações em ordem de criação decrescente, usando uma data de corte fixa. Busca por ID as empresas e o contato principal necessários, mesmo quando são antigos. Verifica os valores projetados e conflitos de e-mail sem criar dados operacionais.
-2. **Criar amostra no Twenty:** cria exatamente os IDs de negociação verificados, seus vínculos, funis e etapas. Inclui uma amostra de até cinco tarefas por negociação. Isso não representa validação de toda a base, de todos os anexos ou do histórico antigo.
-3. **Excluir dados da amostra:** opcionalmente envia à lixeira apenas os registros operacionais novos identificados pelo teste. O histórico técnico, snapshots e comprovantes são mantidos para auditoria e recuperação. Não há destroy/purge. Registros anteriores não são associados à amostra por nome ou semelhança.
+2. **Criar amostra no Twenty:** cria exatamente os IDs de negociação verificados, seus vínculos, funis, etapas e campos personalizados nativos. Inclui uma amostra de até cinco tarefas por negociação. Isso não representa validação de toda a base, de todos os anexos ou do histórico antigo.
+3. **Excluir dados da amostra:** opcionalmente envia à lixeira apenas os registros operacionais novos identificados pelo teste. As visualizações canônicas dos funis criados pelo teste também são removidas, com a configuração guardada para restauração. O histórico técnico, snapshots e comprovantes são mantidos para auditoria e recuperação. Não há destroy/purge. Registros anteriores não são associados à amostra por nome ou semelhança.
 4. **Importar tudo de vez:** ação separada, com conferência do backup e confirmação no diálogo do Twenty. Percorre todos os recursos acessíveis pela API, priorizando as negociações recentes e buscando suas referências conforme necessário. A amostra é incorporada sem duplicações; se tiver sido enviada à lixeira pelo botão, seus registros são restaurados antes da leitura completa. A exclusão de teste fica desativada depois dessa promoção.
 
 ## Ampliar a amostra e associar proprietários
@@ -68,4 +68,23 @@ Revisão de 24/10/2026:
 
 - 355 testes unitários passaram; o caso de cinco páginas congela exatamente 125 IDs e não segue para a página seguinte. Também há cobertura de e-mails normalizados, ausentes/ambíguos, responsáveis V2, referência de companhia e preservação do conjunto de exclusão ao ampliar.
 - Um teste de integração no Twenty isolado em `127.0.0.1:2021` passou: criação com proprietário, preenchimento de proprietário vazio na repetição, preservação de nome/proprietário manual e dos comprovantes de exclusão.
-- Typecheck e lint passaram. A nova simulação de 125 não foi executada na companhia real; aguarda o cadastro prévio do time pelo administrador.
+- Typecheck e lint passaram. A simulação de 125 foi executada posteriormente no painel. A amostra criada foi conferida com 125 negociações, 125 contatos e cinco empresas, além de seis funis e 32 etapas, e depois foi excluída pelo administrador. A validação observada não representa uma importação completa da base.
+
+
+## Visualizações na exclusão da amostra
+
+O rastreamento agora inclui a visualização canônica de cada funil novo da amostra. O comprovante é gravado antes de criar o funil, cobrindo a criação concorrente da visualização por eventos do catálogo. A exclusão guarda campos, grupos, filtros, ordenação e configuração da visualização antes de removê-la. A restauração da amostra ou sua promoção à base completa recria essa configuração antes dos registros do funil.
+
+Visualizações preexistentes e aliases criados pelo usuário são preservados. Para amostras antigas, só é adotada uma visualização com o ID canônico do funil comprovadamente criado pela amostra, ícone de bloqueio e filtro determinístico para aquele funil. Não há seleção por nome.
+
+Se a amostra já aparece como excluída, **Concluir limpeza da amostra** executa apenas a correção das visualizações remanescentes. Não exclui nem restaura registros operacionais novamente. Um funil da amostra restaurado manualmente bloqueia essa correção para revisão. O painel registra a quantidade de visualizações removidas. Depois da correção, a opção fica desativada.
+
+A restauração mantém as colunas das etapas e oculta os placeholders de itens sem etapa que o próprio Twenty pode criar ao reconstruir o Kanban. Campos personalizados são estrutura compartilhada e não são removidos junto da amostra.
+
+### Verificação final da limpeza
+
+O teste de integração passou também pelo reparo de uma visualização órfã com o funil já na lixeira: o worker concluiu com zero requisições ao RD e manteve o funil inativo. A execução tem despacho explícito para `cleanup`, `cleanupViews` e `restore`; operações desconhecidas falham sem restaurar registros.
+
+Na correção de produção, um primeiro caminho de manutenção reativou temporariamente a amostra. A rota foi corrigida e ganhou testes unitários e de integração. Os 293 registros do grupo foram devolvidos à lixeira, as seis visualizações canônicas foram removidas e as consultas finais confirmaram zero empresas, pessoas, negociações, funis e etapas importados ativos. As duas visualizações gerais do Kanban foram preservadas. Nenhuma alteração foi enviada aos dados do RD.
+
+A validação final teve 389 testes unitários, os testes de integração de personalizados e de exclusão/restauração de visualizações, typecheck e lint sem erros. Nenhuma importação completa foi iniciada.

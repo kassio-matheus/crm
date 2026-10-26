@@ -32,6 +32,7 @@ export default defineLogicFunction({
         'sample',
         'start',
         'cleanup',
+        'cleanupViews',
         'pause',
         'resume',
       ].includes(payload.action)

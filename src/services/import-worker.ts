@@ -115,18 +115,31 @@ export class ImportWorker {
           state.accountKey,
           this.core,
         );
-        if (state.maintenance === 'cleanup') {
-          await ledger.cleanup(async (removed, total) => {
-            state.preview!.removed = removed;
-            state.preview!.owned = total;
-            await this.coordinator.save(state);
-          });
+        if (
+          state.maintenance === 'cleanup' ||
+          state.maintenance === 'cleanupViews'
+        ) {
+          if (state.maintenance === 'cleanupViews')
+            state.preview.viewsRemoved = await ledger.cleanupViews();
+          else
+            state.preview.viewsRemoved = await ledger.cleanup(
+              async (removed, total) => {
+                state.preview!.removed = removed;
+                state.preview!.owned = total;
+                await this.coordinator.save(state);
+              },
+            );
+          state.preview.viewsChecked = true;
           state.preview.status = 'REMOVED';
           state.maintenance = undefined;
           state.status = 'COMPLETED';
           await this.coordinator.save(state);
           return;
         }
+        if (state.maintenance !== 'restore')
+          throw new Error(
+            'RD_INVALID_MAINTENANCE: no data operation was executed.',
+          );
         await ledger.restore();
         state.maintenance = undefined;
         await this.coordinator.save(state);
@@ -190,6 +203,8 @@ export class ImportWorker {
         ? new RecordImporter(ledger.client())
         : this.importer;
       if (state.owners) importer.withOwnerCatalog?.(state.owners);
+      if (state.customFields)
+        importer.withCustomCatalog?.(Object.values(state.customFields));
       const dependencies = state.selection
         ? new ImportDependencies(reader, importer, state, this.core)
         : null;
@@ -293,6 +308,13 @@ export class ImportWorker {
       // Cursor advancement only follows a fully persisted page. Partial writes are create-only on replay.
       for (; offset < page.records.length; offset += 1) {
         const record = page.records[offset];
+        if (state.selection && work.kind === 'custom_fields') {
+          if (record.entity === 'deal' && typeof record.slug === 'string') {
+            state.customFields ??= {};
+            state.customFields[String(record.id)] =
+              record as import('src/types/rd-custom-field').RdCustomField;
+          }
+        }
         if (state.selection && work.kind === 'users') {
           const match = await owners.match(record);
           state.owners ??= {};

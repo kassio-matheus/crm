@@ -121,7 +121,11 @@ export class ImportCoordinator {
       if (state.status !== 'COMPLETED')
         throw new Error('Finish the recent sample before importing all data.');
       state = newRecentImport(credentials, state, 'all', false);
-    } else if (action === 'cleanup') {
+    } else if (action === 'cleanup' || action === 'cleanupViews') {
+      if (action === 'cleanupViews' && state?.preview?.status !== 'REMOVED')
+        throw new Error(
+          'RD_SAMPLE_NOT_REMOVED: view-only repair requires an already removed sample.',
+        );
       if (
         !state ||
         state.selection?.scope !== 'sample' ||
@@ -131,10 +135,15 @@ export class ImportCoordinator {
         throw new Error(
           'Only records owned by the recent sample can be removed.',
         );
-      if (state.preview.status === 'REMOVED') return state;
+      if (state.preview.status === 'REMOVED' && state.preview.viewsChecked)
+        return state;
       state = {
         ...state,
-        maintenance: 'cleanup',
+        maintenance:
+          state.preview.status === 'REMOVED' ||
+          state.maintenance === 'cleanupViews'
+            ? 'cleanupViews'
+            : 'cleanup',
         status: 'READY',
         error: null,
         revision: state.revision + 1,

@@ -1,3 +1,4 @@
+import { ImportPreviewViews } from 'src/services/import-preview-views';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 import { sourceId } from 'src/utils/source-id.util';
 import { importNativeTarget } from 'src/utils/import-native-target.util';
@@ -9,6 +10,7 @@ export class ImportPreviewLedger {
     private runId: string,
     private account: string,
     private core = new CoreApiClient(),
+    private views = new ImportPreviewViews(runId, account, core),
   ) {}
   private prefix() {
     return `preview:${this.runId}:`;
@@ -48,6 +50,8 @@ export class ImportPreviewLedger {
               sourceId(key) !== data.id)
           )
             throw new Error('RD_INVALID_PREVIEW_TARGET');
+          if (target.table === 'salesPipelines')
+            await this.views.claim(data.id);
           await this.claim({
             table: target.table,
             id: data.id,
@@ -190,6 +194,19 @@ export class ImportPreviewLedger {
         );
     }
   }
+  async cleanupViews() {
+    const entries = await this.entries();
+    const pipelines = entries
+      .map((entry) => entry.owned)
+      .filter((owned) => owned.table === 'salesPipelines');
+    for (const pipeline of pipelines)
+      if (await this.active(pipeline))
+        throw new Error(
+          'RD_PREVIEW_PIPELINE_RESTORED: a sample pipeline is active again. Review it before removing its view.',
+        );
+    await this.views.prepare(pipelines);
+    return this.views.cleanup(pipelines);
+  }
   async cleanup(progress: (removed: number, total: number) => Promise<void>) {
     const entries = await this.entries();
     // Preflight all external relationships before the first soft deletion.
@@ -199,6 +216,11 @@ export class ImportPreviewLedger {
           owned,
           entries.map((item) => item.owned),
         );
+    const pipelines = entries
+      .map((entry) => entry.owned)
+      .filter((owned) => owned.table === 'salesPipelines');
+    const views = this.views;
+    await views.prepare(pipelines);
     const order = [
       'attachments',
       'taskTargets',
@@ -232,9 +254,15 @@ export class ImportPreviewLedger {
       removed += 1;
       await progress(removed, entries.length);
     }
+    return views.cleanup(pipelines);
   }
   async restore() {
     const entries = await this.entries();
+    await this.views.restore(
+      entries
+        .map((entry) => entry.owned)
+        .filter((owned) => owned.table === 'salesPipelines'),
+    );
     const order = [
       'salesPipelines',
       'salesStages',

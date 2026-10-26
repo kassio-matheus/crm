@@ -14,7 +14,7 @@ Tarefas e notas usam IDs estáveis também para seus vínculos. Arquivos existen
 
 - Um novo cadastro no RD com outro ID é um registro distinto, mesmo que tenha o mesmo nome, domínio ou telefone.
 - Cadastros feitos manualmente no Twenty não são associados automaticamente por semelhança. Conflitos de e-mail principal em contatos interrompem o processo para revisão.
-- A importação preserva registros já trazidos e alterações feitas no Twenty. A única reconciliação de dados operacionais é preencher um proprietário/responsável vazio, com correspondência única de e-mail e condição de vazio na mesma escrita do banco. Não substitui um proprietário definido nem atualiza os demais campos com mudanças posteriores do RD.
+- A importação preserva registros já trazidos e alterações feitas no Twenty. A reconciliação pode preencher um proprietário/responsável vazio e os novos campos de origem/personalizados nulos, com correspondência única de e-mail para os responsáveis e condição de vazio na mesma escrita do banco. Não substitui um proprietário definido nem atualiza os demais campos com mudanças posteriores do RD.
 - O sistema mantém uma migração por workspace. A amostra pode ser simulada novamente e ampliada sem perder seus comprovantes de exclusão. Depois de concluída uma importação completa, repetir os comandos não inicia outro ciclo. Uma migração em andamento continua do checkpoint. A companhia e a versão da API ficam fixas.
 - O envio de um arquivo interrompido antes de salvar seu recibo pode deixar um arquivo de armazenamento sem vínculo. Isso não cria outra negociação ou outro registro de anexo.
 

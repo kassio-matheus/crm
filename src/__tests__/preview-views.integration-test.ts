@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, expect, it } from 'vitest';
+import { kv } from 'twenty-sdk/logic-function';
+import { ImportWorker } from 'src/services/import-worker';
+import type { ImportCoordinator } from 'src/services/import-coordinator';
+import type { ImportState } from 'src/types/import-state';
+import { importState } from './fixtures/import-state';
+import { ImportPreviewViews } from 'src/services/import-preview-views';
+import { afterAll, expect, it, vi } from 'vitest';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 import { MetadataApiClient } from 'twenty-client-sdk/metadata';
 import { RecordImporter } from 'src/services/record-importer';
@@ -93,6 +99,52 @@ it('removes only sample-owned native pipeline views and recreates them on sample
   expect(removed.getViews.some((v) => v.id === pipelineId)).toBe(false);
   expect(removed.getViews.some((v) => v.id === aliasId)).toBe(true);
   expect(removed.getViews.some((v) => v.id === existingId)).toBe(true);
+  // Reproduce a historical orphaned view with native pipeline records still in trash.
+  const pipelines = (await ledger.entries())
+    .map((entry) => entry.owned)
+    .filter((entry) => entry.table === 'salesPipelines');
+  await new ImportPreviewViews(run, account, core, metadata).restore(pipelines);
+  const repair: ImportState = importState({
+    id: run,
+    accountKey: account,
+    version: 'v2',
+    dryRun: false,
+    status: 'READY',
+    phase: 'done',
+    requests: 0,
+    maintenance: 'cleanupViews',
+    preview: { runId: run, status: 'CLEANING', owned: 2, removed: 2 },
+  });
+  const coordinator = {
+    read: vi.fn().mockResolvedValue(repair),
+    save: vi.fn(),
+    enqueueNext: vi.fn(),
+  };
+  const paused = vi.spyOn(kv, 'get').mockResolvedValue(false);
+  try {
+    await new ImportWorker(
+      coordinator as unknown as ImportCoordinator,
+      new RecordImporter(core),
+      core,
+    ).run({});
+  } finally {
+    paused.mockRestore();
+  }
+  expect(repair.status).toBe('COMPLETED');
+  expect(repair.requests).toBe(0);
+  expect(repair.preview).toMatchObject({
+    status: 'REMOVED',
+    viewsRemoved: 1,
+    viewsChecked: true,
+  });
+  expect(coordinator.enqueueNext).not.toHaveBeenCalled();
+  const nativeAfterRepair = await core.query({
+    salesPipelines: {
+      __args: { first: 1, filter: { id: { eq: pipelineId } } },
+      edges: { node: { id: true } },
+    },
+  });
+  expect(nativeAfterRepair.salesPipelines!.edges).toEqual([]);
   await ledger.restore();
   const restored = await metadata.query({
     getView: {

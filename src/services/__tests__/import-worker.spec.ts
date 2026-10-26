@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ImportPreviewLedger } from '../import-preview-ledger';
 import { ImportWorker } from '../import-worker';
 import type { ImportCoordinator } from '../import-coordinator';
 import type { RecordImporter } from '../record-importer';
@@ -371,4 +372,71 @@ describe('recent sample and complete date windows', () => {
     expect(save).not.toHaveBeenCalled();
     expect(mocks.list).not.toHaveBeenCalled();
   });
+});
+
+it.each(['cleanup', 'cleanupViews'] as const)(
+  'routes %s without restoring data or making any RD request',
+  async (maintenance) => {
+    const normal = vi
+      .spyOn(ImportPreviewLedger.prototype, 'cleanup')
+      .mockResolvedValue(6);
+    const views = vi
+      .spyOn(ImportPreviewLedger.prototype, 'cleanupViews')
+      .mockResolvedValue(6);
+    const restore = vi
+      .spyOn(ImportPreviewLedger.prototype, 'restore')
+      .mockRejectedValue(new Error('Restoration is forbidden during cleanup'));
+    try {
+      const current: ImportState = {
+        ...initial(),
+        maintenance,
+        phase: 'done',
+        preview: {
+          runId: 'preview',
+          status: 'CLEANING',
+          owned: 293,
+          removed: 293,
+        },
+      };
+      const { worker, state, coordinator } = setup(current);
+      await worker.run({});
+      expect(state.status).toBe('COMPLETED');
+      expect(state.preview).toMatchObject({
+        status: 'REMOVED',
+        viewsRemoved: 6,
+        viewsChecked: true,
+        removed: 293,
+      });
+      expect(
+        maintenance === 'cleanupViews' ? views : normal,
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        maintenance === 'cleanupViews' ? normal : views,
+      ).not.toHaveBeenCalled();
+      expect(restore).not.toHaveBeenCalled();
+      expect(mocks.list).not.toHaveBeenCalled();
+      expect(coordinator.enqueueNext).not.toHaveBeenCalled();
+    } finally {
+      normal.mockRestore();
+      views.mockRestore();
+      restore.mockRestore();
+    }
+  },
+);
+it('fails closed on an unknown maintenance operation instead of restoring a sample', async () => {
+  const restore = vi.spyOn(ImportPreviewLedger.prototype, 'restore');
+  try {
+    const { worker, state } = setup({
+      ...initial(),
+      maintenance: 'unknown' as ImportState['maintenance'],
+      preview: { runId: 'preview', status: 'CLEANING', owned: 1, removed: 1 },
+    });
+    await worker.run({});
+    expect(state.status).toBe('FAILED');
+    expect(state.error).toContain('RD_INVALID_MAINTENANCE');
+    expect(restore).not.toHaveBeenCalled();
+    expect(mocks.list).not.toHaveBeenCalled();
+  } finally {
+    restore.mockRestore();
+  }
 });

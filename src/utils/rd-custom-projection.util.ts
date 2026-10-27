@@ -1,4 +1,5 @@
 import { sourceId } from 'src/utils/source-id.util';
+import { rdOptionLabel } from 'src/utils/rd-option-label.util';
 import type { RdCustomField } from 'src/types/rd-custom-field';
 import type { RdCustomProjection } from 'src/types/rd-custom-projection';
 
@@ -87,7 +88,7 @@ export const rdCustomProjection = (
       type: type === 'option' ? 'SELECT' : 'MULTI_SELECT',
       options: labels.map((label, position) => ({
         id: sourceId(`${identity}:option:${label}`),
-        label,
+        label: rdOptionLabel(label),
         value: optionValue(label),
         position,
         color: 'blue',

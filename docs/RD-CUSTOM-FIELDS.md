@@ -11,7 +11,9 @@ A importação V2 lê o catálogo `/custom_fields` antes das negociações. Cada
 | `multiple_choice` | Seleção múltipla |
 | Tipo desconhecido | JSON, preservando a estrutura disponível |
 
-Quando o catálogo não contém uma chave recebida, o importador infere texto, número, booleano, seleção múltipla de textos ou JSON a partir do valor. A referência técnica usa um nome em inglês e um identificador estável derivado da companhia e do slug, sem depender do nome do cliente ou da execução. As opções usam valores nativos estáveis; seus rótulos continuam iguais aos do RD. Novas opções observadas são acrescentadas sem remover as anteriores.
+Quando o catálogo não contém uma chave recebida, o importador infere texto, número, booleano, seleção múltipla de textos ou JSON a partir do valor. A referência técnica usa um nome em inglês e um identificador estável derivado da companhia e do slug, sem depender do nome do cliente ou da execução. As opções usam valores nativos estáveis, derivados do texto original. Novas opções observadas são acrescentadas sem remover as anteriores.
+
+O Twenty não aceita vírgulas, rótulos vazios ou opções com mais de 63 caracteres. Somente o rótulo exibido é adaptado: vírgulas viram ponto e vírgula; rótulos longos são abreviados com uma referência estável. O catálogo e o JSON da negociação preservam os textos completos. IDs e valores das opções continuam baseados no texto original, inclusive em retomadas. Uma seleção sem opções no catálogo e sem resposta é adiada até que o RD forneça uma opção válida, sem inventar uma resposta nem perder o valor original.
 
 Valores vazios, zero, `false`, listas e objetos são preservados. Campos de seleção e data vazios ficam nulos no campo nativo; o JSON original retém a representação recebida. Datas impossíveis, números inválidos e colisões com campos existentes interrompem a importação no checkpoint. O sistema não converte nem exclui um campo existente para acomodar uma mudança de tipo.
 
@@ -25,6 +27,12 @@ A simulação valida os tipos usando o catálogo da própria execução e não c
 
 Use uma **nova simulação** para carregar o novo plano com o catálogo antes das negociações. Checkpoints antigos mantêm seu plano para evitar reinterpretar os índices já processados. Campos de estrutura são compartilhados pela base e não são excluídos ao remover a amostra. Regras condicionais de obrigatoriedade e exibição do RD permanecem no catálogo de origem; não são convertidas automaticamente em regras de negócio do Twenty.
 
+## Retomada após erro nos campos
+
+Uma execução que já carregou o catálogo e parou ao criar os campos pode usar **Retomar importação** após a atualização do aplicativo. Não é necessário excluir a amostra, reiniciar a seleção ou salvar novamente as credenciais. A mesma página e posição são retomadas; registros e IDs existentes são reaproveitados. Uma falha de preparação passa a mostrar `RD_CUSTOM_FIELD_SETUP`, o identificador técnico do campo e um código conhecido do Twenty, sem incluir respostas completas, valores de clientes ou credenciais.
+
 ## Validação
 
-Os testes cobrem texto vazio, zero, números inválidos, datas, opções estáveis e novas opções, seleção múltipla, estruturas desconhecidas, colisões de esquema e proteção de valores manuais. Um teste contra o Twenty isolado em `127.0.0.1:2021` confirmou a criação dos campos nativos, a gravação dos valores e preços, a exposição no formulário e a preservação de edição manual na repetição. Os dados usados nesse teste são fixtures descartáveis, separados da produção.
+Os testes cobrem texto vazio, zero, números inválidos, datas, opções estáveis e novas opções, seleção múltipla, vírgulas e rótulos longos, catálogos vazios, estruturas desconhecidas, colisões de esquema e proteção de valores manuais. O teste contra o Twenty isolado em `127.0.0.1:2021` verifica a criação dos campos nativos, a gravação dos valores e preços, a exposição no formulário e a preservação de edição manual na repetição. Os dados usados nesse teste são fixtures descartáveis, separados da produção.
+
+Em 27/10/2026, passaram 401 testes unitários, verificação de tipos e lint. O teste com banco na versão 2.50.1 reproduziu a rejeição das opções originais com vírgulas e confirmou a gravação após a adaptação. Em produção, o plano alterou apenas `rd-import-worker`, sem excluir metadados. A retomada passou pelas 125 negociações da seleção existente; uma consulta confirmou 125 destinos canônicos sem chaves duplicadas e oito valores personalizados correspondentes ao JSON preservado de uma negociação.

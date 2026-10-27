@@ -6,6 +6,7 @@ import type { RecordImporter } from '../record-importer';
 import type { ImportState } from 'src/types/import-state';
 import type { CoreApiClient } from 'twenty-client-sdk/core';
 import { sourceId } from 'src/utils/source-id.util';
+import { rdCustomFieldError } from 'src/utils/rd-custom-field-error.util';
 const mocks = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), set: vi.fn() }));
 vi.mock('src/rd-client/rd-client', () => ({
   RdClient: class {
@@ -152,6 +153,36 @@ describe('ImportWorker', () => {
 });
 
 describe('checkpoint consistency', () => {
+  it('retains and resumes the exact record after native custom-field preparation fails', async () => {
+    const { worker, state, importer, coordinator } = setup();
+    mocks.list.mockResolvedValue({
+      records: [{ id: '1' }, { id: '2' }],
+      hasMore: false,
+    });
+    importer.import.mockRejectedValueOnce(
+      rdCustomFieldError(new Error('PRIVATE'), `rdCustom${'a'.repeat(32)}`),
+    );
+    await worker.run({});
+    expect(state.status).toBe('FAILED');
+    expect(state.page).toBe(1);
+    expect(state.recordOffset).toBe(0);
+    expect(state.processed).toBe(0);
+    expect(state.error).toContain('RD_CUSTOM_FIELD_SETUP');
+    expect(state.error).not.toContain('PRIVATE');
+    expect(coordinator.enqueueNext).not.toHaveBeenCalled();
+    // The queued continuation runs after the persisted request budget expires.
+    state.nextRequestAt = 0;
+    await worker.run({ revision: state.revision, command: 'continue' });
+    expect(importer.import.mock.calls.map((call) => call[1])).toEqual([
+      { id: '1' },
+      { id: '1' },
+      { id: '2' },
+    ]);
+    expect(state.processed).toBe(2);
+    expect(state.error).toBeNull();
+    expect(coordinator.enqueueNext).toHaveBeenCalled();
+  });
+
   it('resumes at the persisted record offset without double-counting', async () => {
     const state = initial();
     state.recordOffset = 1;

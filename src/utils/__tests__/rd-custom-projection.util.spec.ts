@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { rdCustomProjection } from '../rd-custom-projection.util';
+import { sourceId } from '../source-id.util';
 it('keeps all original text including empty values and uses a stable English identifier', () => {
   const first = rdCustomProjection('account', 'ja-trabalha-com-acai', '', {
     slug: 'ja-trabalha-com-acai',
@@ -89,4 +90,28 @@ it('maps multiple choices and rejects arrays in a text definition', () => {
   expect(() =>
     rdCustomProjection('a', 'text', ['A'], { slug: 'text', type: 'text' }),
   ).toThrow('RD_INVALID_CUSTOM_FIELD_VALUE');
+});
+
+it('adapts RD enum labels while keeping the original option identity and selection', () => {
+  const raw = 'Sim, tenho delivery.';
+  const options = [raw, 'Não.'];
+  const result = rdCustomProjection('a', 'answer', raw, {
+    slug: 'answer',
+    type: 'option',
+    options,
+  });
+  const originalId = sourceId(`rd-custom:a:deal:answer:option:${raw}`);
+  expect(result.options![0]).toMatchObject({
+    id: originalId,
+    label: 'Sim; tenho delivery.',
+    value: `RD_${originalId.replace(/-/g, '').toUpperCase()}`,
+  });
+  expect(result.value).toBe(result.options![0].value);
+  expect(options).toEqual([raw, 'Não.']);
+  const multiple = rdCustomProjection('a', 'answer', [raw], {
+    slug: 'answer',
+    type: 'multiple_choice',
+    options,
+  });
+  expect(multiple.value).toEqual([result.value]);
 });

@@ -1,6 +1,7 @@
 import { CoreApiClient, type CoreSchema } from 'twenty-client-sdk/core';
 import { MetadataApiClient } from 'twenty-client-sdk/metadata';
 import { rdCustomProjection } from 'src/utils/rd-custom-projection.util';
+import { rdCustomFieldError } from 'src/utils/rd-custom-field-error.util';
 import { sanitizeSource } from 'src/utils/sanitize-source.util';
 import { sourceId } from 'src/utils/source-id.util';
 import type { RdCustomField } from 'src/types/rd-custom-field';
@@ -33,18 +34,35 @@ export class ImportCustomFields {
     const entries = Object.entries(custom);
     if (!entries.length) return {};
     const definitions = await (this.catalog ??= this.loadCatalog(account));
-    const projections = entries.map(([slug, value]) =>
-      rdCustomProjection(
-        account,
-        slug,
-        value,
-        definitions.find(
-          (field) => field.slug === slug && field.entity === 'deal',
+    const projections = entries
+      .map(([slug, value]) =>
+        rdCustomProjection(
+          account,
+          slug,
+          value,
+          definitions.find(
+            (field) => field.slug === slug && field.entity === 'deal',
+          ),
         ),
-      ),
-    );
+      )
+      .filter((projection) => projection.options?.length !== 0);
+    // Twenty requires at least one enum option. Defer empty catalogs until a choice
+    // is supplied by RD; the original empty value remains in the source snapshot.
     if (!dryRun)
-      for (const projection of projections) await this.ensure(projection);
+      for (const projection of projections) {
+        try {
+          await this.ensure(projection);
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            /^(RD_MISSING_OPPORTUNITY_METADATA|RD_MISSING_DEAL_FIELDS_VIEW|RD_CUSTOM_FIELD_SCHEMA_CONFLICT)(:|$)/.test(
+              error.message,
+            )
+          )
+            throw error;
+          throw rdCustomFieldError(error, projection.name);
+        }
+      }
     return Object.fromEntries(
       projections.map((field) => [field.name, field.value]),
     );

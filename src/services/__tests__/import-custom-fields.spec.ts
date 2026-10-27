@@ -117,3 +117,38 @@ it('fills only a null canonical custom field, preserving blank or manually edite
     data: { [a]: 'source' },
   });
 });
+
+it('defers enum creation with no available options and creates it when a source choice appears', async () => {
+  const t = setup();
+  t.service.withCatalog([
+    { slug: 'state', type: 'option', entity: 'deal', options: [] },
+  ]);
+  expect(
+    await t.service.project({ custom_fields: { state: '' } }, 'a', false),
+  ).toEqual({});
+  expect(t.metadataQuery).not.toHaveBeenCalled();
+  expect(t.metadataMutation).not.toHaveBeenCalled();
+  const next = await t.service.project(
+    { custom_fields: { state: 'MT' } },
+    'a',
+    false,
+  );
+  expect(Object.values(next)[0]).toMatch(/^RD_/);
+  expect(
+    t.metadataMutation.mock.calls[0][0].createOneField.__args.input.field
+      .options,
+  ).toMatchObject([{ label: 'MT' }]);
+});
+
+it('reports a safe destination error without exposing metadata response contents', async () => {
+  const t = setup();
+  const error = Object.assign(new Error('PRIVATE token=SECRET'), {
+    errors: [{ extensions: { code: 'FORBIDDEN' } }],
+  });
+  t.metadataQuery.mockRejectedValue(error);
+  await expect(
+    t.service.project({ custom_fields: { answer: 'Sim' } }, 'a', false),
+  ).rejects.toThrow(
+    /RD_CUSTOM_FIELD_SETUP: rdCustom[0-9a-f]{32} \(FORBIDDEN\)/,
+  );
+});

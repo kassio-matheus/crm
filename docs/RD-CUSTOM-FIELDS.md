@@ -27,6 +27,12 @@ A simulação valida os tipos usando o catálogo da própria execução e não c
 
 Use uma **nova simulação** para carregar o novo plano com o catálogo antes das negociações. Checkpoints antigos mantêm seu plano para evitar reinterpretar os índices já processados. Campos de estrutura são compartilhados pela base e não são excluídos ao remover a amostra. Regras condicionais de obrigatoriedade e exibição do RD permanecem no catálogo de origem; não são convertidas automaticamente em regras de negócio do Twenty.
 
+## Retomada após erro nos campos
+
+Uma execução que já carregou o catálogo e parou ao criar os campos pode usar **Retomar importação** após a atualização do aplicativo. Não é necessário excluir a amostra, reiniciar a seleção ou salvar novamente as credenciais. A mesma página e posição são retomadas; registros e IDs existentes são reaproveitados. Uma falha de preparação passa a mostrar `RD_CUSTOM_FIELD_SETUP`, o identificador técnico do campo e um código conhecido do Twenty, sem incluir respostas completas, valores de clientes ou credenciais.
+
 ## Validação
 
 Os testes cobrem texto vazio, zero, números inválidos, datas, opções estáveis e novas opções, seleção múltipla, vírgulas e rótulos longos, catálogos vazios, estruturas desconhecidas, colisões de esquema e proteção de valores manuais. O teste contra o Twenty isolado em `127.0.0.1:2021` verifica a criação dos campos nativos, a gravação dos valores e preços, a exposição no formulário e a preservação de edição manual na repetição. Os dados usados nesse teste são fixtures descartáveis, separados da produção.
+
+Em 27/10/2026, passaram 401 testes unitários, verificação de tipos e lint. O teste com banco na versão 2.50.1 reproduziu a rejeição das opções originais com vírgulas e confirmou a gravação após a adaptação. Em produção, o plano alterou apenas `rd-import-worker`, sem excluir metadados. A retomada passou pelas 125 negociações da seleção existente; uma consulta confirmou 125 destinos canônicos sem chaves duplicadas e oito valores personalizados correspondentes ao JSON preservado de uma negociação.

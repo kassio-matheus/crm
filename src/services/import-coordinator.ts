@@ -12,6 +12,7 @@ import type { ImportState } from 'src/types/import-state';
 import { sourceId } from 'src/utils/source-id.util';
 import { parseCredentials } from 'src/utils/parse-credentials.util';
 import { newRecentImport } from 'src/utils/new-recent-import.util';
+import { ImportOwners } from 'src/services/import-owners';
 import type { ImportAction } from 'src/types/import-action';
 import type { ImportTransition } from 'src/types/import-transition';
 
@@ -54,6 +55,28 @@ export class ImportCoordinator {
     });
     let state = await this.read();
     if (action === 'status') {
+      if (state?.owners) {
+        const resolver = new ImportOwners(this.client);
+        const account = state.accountKey;
+        const owners = await Promise.all(
+          Object.entries(state.owners).map(
+            async ([key, owner]) =>
+              [
+                key,
+                await resolver.match(
+                  { id: owner.sourceId, name: owner.name, email: owner.email },
+                  account,
+                ),
+              ] as const,
+          ),
+        );
+        // Refresh the display only. Status reads never overwrite a running worker's checkpoint.
+        state = {
+          ...state,
+          owners: Object.fromEntries(owners),
+          ownersCheckedAt: new Date().toISOString(),
+        };
+      }
       if (state && ['READY', 'RUNNING'].includes(state.status)) {
         const latest = await this.latestJob(state);
         state = {

@@ -1,10 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, expect, it } from 'vitest';
+import { afterAll, expect, it, vi } from 'vitest';
 import { CoreApiClient } from 'twenty-client-sdk/core';
 import { RecordImporter } from 'src/services/record-importer';
 import { ImportOwners } from 'src/services/import-owners';
 import { ImportPreviewLedger } from 'src/services/import-preview-ledger';
 import { sourceId } from 'src/utils/source-id.util';
+import { MetadataApiClient } from 'twenty-client-sdk/metadata';
+import { ImportOwnerReconciler } from 'src/services/import-owner-reconciler';
+const rd = vi.hoisted(() => ({ list: vi.fn() }));
+vi.mock('src/rd-client/rd-client', () => ({
+  RdClient: class {
+    list = rd.list;
+  },
+}));
 
 const core = new CoreApiClient();
 const account = `test-owners-${randomUUID()}`;
@@ -145,4 +153,126 @@ it('assigns owners by email, fills null owners on replay, preserves manual owner
     randomUUID(),
   );
   expect((await read()).opportunities!.edges).toHaveLength(1);
+
+  // The same source identity can use a different login email in Twenty.
+  for (const [mutation, kind, field] of [
+    ['updateCompany', 'organizations', 'accountOwnerId'],
+    ['updateOpportunity', 'deals', 'ownerId'],
+    ['updateTask', 'tasks', 'assigneeId'],
+  ])
+    await core.mutation({
+      [mutation]: {
+        __args: { id: nativeId(kind), data: { [field]: null } },
+        id: true,
+      },
+    } as Parameters<CoreApiClient['mutation']>[0]);
+  const mappingKey = `${account}:owner-mapping:rd-owner`;
+  await core.mutation({
+    createRdSourceRecord: {
+      __args: {
+        data: {
+          id: sourceId(mappingKey),
+          sourceKey: mappingKey,
+          sourceId: 'rd-owner',
+          targetId: member.id,
+          recordKind: 'ownerMapping',
+          name: 'Confirmed fixture owner mapping',
+        },
+      },
+      id: true,
+    },
+  });
+  const source = {
+    id: 'rd-owner',
+    name: 'Fixture owner',
+    email: 'different@example.com',
+  };
+  const simulated = await new ImportOwners(core).match(source, account);
+  expect(simulated).toMatchObject({
+    memberId: member.id,
+    status: 'matched',
+    matchMethod: 'explicit',
+    email: 'different@example.com',
+  });
+  const before = await read();
+  expect(before.opportunities!.edges[0].node.ownerId).toBeNull();
+  expect(before.companies!.edges[0].node.accountOwnerId).toBeNull();
+  expect(before.tasks!.edges[0].node.assigneeId).toBeNull();
+  const mappedImporter = new RecordImporter(ledger.client()).withOwnerCatalog({
+    'rd-owner': {
+      sourceId: 'rd-owner',
+      name: 'Fixture owner',
+      email: source.email,
+      memberId: null,
+      status: 'missing',
+    },
+  });
+  for (const kind of ['organizations', 'deals', 'tasks'])
+    await mappedImporter.import(
+      kind,
+      {
+        id: 'fixture',
+        owner_id: 'rd-owner',
+        ...(kind === 'tasks' ? { owner_ids: ['rd-owner'] } : {}),
+      },
+      account,
+      run,
+      false,
+    );
+  const repaired = await read();
+  expect(repaired.opportunities!.edges[0].node.ownerId).toBe(member.id);
+  expect(repaired.companies!.edges[0].node.accountOwnerId).toBe(member.id);
+  expect(repaired.tasks!.edges[0].node.assigneeId).toBe(member.id);
+  expect(repaired.opportunities!.edges[0].node.name).toBe(
+    'Manual edit preserved',
+  );
+  expect((await ledger.entries()).map((entry) => entry.receiptId)).toEqual(
+    receipts.map((entry) => entry.receiptId),
+  );
+  for (const [mutation, kind, field] of [
+    ['updateCompany', 'organizations', 'accountOwnerId'],
+    ['updateOpportunity', 'deals', 'ownerId'],
+    ['updateTask', 'tasks', 'assigneeId'],
+  ])
+    await core.mutation({
+      [mutation]: {
+        __args: { id: nativeId(kind), data: { [field]: null } },
+        id: true,
+      },
+    } as Parameters<CoreApiClient['mutation']>[0]);
+  process.env.RD_CREDENTIALS = JSON.stringify({
+    accountKey: account,
+    version: 'v2',
+    accessToken: 'fixture',
+    refreshToken: 'fixture',
+    clientId: 'fixture',
+    clientSecret: 'fixture',
+  });
+  rd.list.mockResolvedValue({
+    records: [{ id: 'fixture', owner_id: 'rd-owner', owner_ids: ['rd-owner'] }],
+  });
+  const payload = {
+    records: (['deals', 'organizations', 'tasks'] as const).map((kind) => ({
+      id: nativeId(kind),
+      kind,
+    })),
+  };
+  const repair = new ImportOwnerReconciler(
+    core,
+    new MetadataApiClient(),
+    async () => {},
+  );
+  expect(await repair.run(payload)).toMatchObject({
+    completed: true,
+    assigned: 3,
+    preserved: 0,
+    requests: 3,
+  });
+  expect(await repair.run(payload)).toMatchObject({
+    completed: true,
+    assigned: 0,
+    preserved: 3,
+    requests: 0,
+  });
+  expect(rd.list).toHaveBeenCalledTimes(3);
 });

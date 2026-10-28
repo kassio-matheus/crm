@@ -27,6 +27,7 @@ vi.mock('twenty-sdk/logic-function', () => ({
 import { ImportCoordinator } from '../import-coordinator';
 import type { ImportState } from 'src/types/import-state';
 import type { ImportTransition } from 'src/types/import-transition';
+import { sourceId } from 'src/utils/source-id.util';
 const state = (): ImportState => ({
   id: 'run',
   accountKey: 'acme',
@@ -72,6 +73,75 @@ beforeEach(() => {
   });
 });
 describe('ImportCoordinator', () => {
+  it('refreshes current owner matches for simulation and live status without overwriting checkpoint progress', async () => {
+    const current = {
+      ...state(),
+      status: 'COMPLETED' as const,
+      processed: 125,
+      owners: {
+        rd: {
+          sourceId: 'rd',
+          name: 'Owner',
+          email: 'old@example.com',
+          memberId: null,
+          status: 'missing' as const,
+        },
+      },
+    };
+    const key = 'acme:owner-mapping:rd';
+    mocks.query.mockImplementation(async (request) => {
+      if (request.workspaceMembers)
+        return {
+          workspaceMembers: {
+            edges: [
+              {
+                node: {
+                  id: 'member',
+                  userEmail: 'new@example.com',
+                  name: { firstName: 'Confirmed', lastName: 'Owner' },
+                },
+              },
+            ],
+            pageInfo: { hasNextPage: false },
+          },
+        };
+      if (request.rdSourceRecords?.__args.filter.recordKind)
+        return {
+          rdSourceRecords: {
+            edges: [
+              {
+                node: {
+                  id: sourceId(key),
+                  sourceKey: key,
+                  sourceId: 'rd',
+                  targetId: 'member',
+                },
+              },
+            ],
+            pageInfo: { hasNextPage: false },
+          },
+        };
+      return {
+        rdSourceRecords: { edges: [{ node: { sourcePayload: current } }] },
+      };
+    });
+    for (const dryRun of [true, false]) {
+      current.dryRun = dryRun;
+      const result = await new ImportCoordinator().control('status');
+      expect(result?.owners?.rd).toMatchObject({
+        memberId: 'member',
+        status: 'matched',
+        matchMethod: 'explicit',
+        memberEmail: 'new@example.com',
+      });
+      expect(result?.ownersCheckedAt).toBeTruthy();
+      expect(result?.processed).toBe(125);
+      expect(current.owners.rd.memberId).toBeNull();
+      expect(mocks.mutation).not.toHaveBeenCalled();
+      expect(mocks.enqueue).not.toHaveBeenCalled();
+    }
+  });
+
   it('uses the same atomic winning transition and queue slot for competing sample and full-import commands', async () => {
     const previous = {
       ...state(),

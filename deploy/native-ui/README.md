@@ -1,4 +1,9 @@
-# Managed pipeline views in the native Twenty picker
+# Native Twenty sales controls
+
+The pinned host adapter also provides complete phase selection, prioritized bulk actions, native pipeline filters and retirement of the old opportunity stage controls. See [operating behavior and validation](../../docs/NATIVE-SALES-ACTIONS.md). It uses Twenty's existing React, theme, dropdowns, fields, confirmations, authenticated API and permission-aware record hooks. The readable runtime factories are checked against the exact supported native bundles before installation.
+
+## Managed pipeline picker
+
 
 The app still uses Twenty's kanban, view picker, dropdown, cards and side panel. Twenty v2.50.1 does not expose a per-view edit/delete lock to apps. Its native picker shows those actions whenever the current user has `VIEWS` permission, including for app-owned views.
 
@@ -6,7 +11,7 @@ This small host adaptation hides **Edit** and **Delete** in `ViewPickerOptionDro
 
 `twenty-v2.50.1.patch` contains the equivalent source change against upstream commit `1dccdfc5ad33bf11015064380e78eddcf0e69340` (`twenty/v2.50.1`). When building a full Twenty fork, apply this source patch before compiling its frontend.
 
-The Railway wrapper uses the already compiled, digest-pinned official image. `apply.mjs` applies the same one-expression change to its native picker bundle. It checks the exact upstream SHA-256 and unique expected code before changing any file. Unsupported releases fail the image build. All JavaScript/CSS URLs and their import references receive a revision suffix to prevent browsers from reusing an older cached picker. An installation receipt makes reapplication idempotent. No script is injected into the browser and no CSS hides DOM elements.
+The Railway wrapper uses the already compiled, digest-pinned official image. `apply.mjs` applies the picker protection and the audited native sales adapters to its pinned native bundles. It checks the exact upstream SHA-256 and unique expected code before changing any file. Unsupported releases fail the image build. All JavaScript/CSS URLs and their import references receive a revision suffix to prevent browsers from reusing an older cached picker. An installation receipt verifies every adapted bundle and makes reapplication idempotent. No script is injected into the browser and no CSS hides DOM elements.
 
 Local development (after applying the app):
 

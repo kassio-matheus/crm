@@ -13,7 +13,15 @@ if (!existsSync(backup)) {
   chmodSync(backup, 0o700);
 }
 docker('exec', container, 'mkdir', '-p', '/tmp/crm-native-ui');
-for (const name of ['apply.mjs', 'patch-picker.mjs'])
+for (const name of [
+  'apply.mjs',
+  'patch-picker.mjs',
+  'patch-sales.mjs',
+  'sales-bulk-policy.mjs',
+  'sales-bulk-runtime.mjs',
+  'sales-board-runtime.mjs',
+  'sales-filters-runtime.mjs',
+])
   docker(
     'cp',
     join(root, 'deploy/native-ui', name),

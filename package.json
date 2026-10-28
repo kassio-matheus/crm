@@ -20,7 +20,7 @@
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "setup:workspace": "node scripts/setup-workspace.mjs",
     "configure:native-sales": "node scripts/configure-native-sales.mjs",
-    "test:deployment": "node --experimental-strip-types --test deploy/railway/*.test.mjs deploy/native-ui/patch-picker.test.mjs",
+    "test:deployment": "node --experimental-strip-types --test deploy/railway/*.test.mjs deploy/native-ui/*.test.mjs",
     "configure:native-host": "node scripts/configure-native-host.mjs",
     "railway": "railway",
     "railway:plan": "railway config plan --file .railway/railway.ts",

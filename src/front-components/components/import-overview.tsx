@@ -219,7 +219,11 @@ export const ImportOverview = ({
           </>
         )}
       </section>
-      <ImportOwnerPanel owners={state?.owners} dryRun={state?.dryRun ?? true} />
+      <ImportOwnerPanel
+        owners={state?.owners}
+        dryRun={state?.dryRun ?? true}
+        checkedAt={state?.ownersCheckedAt}
+      />
       <div className="ri-metrics">
         {metrics.map(({ title, value, note, Icon }) => (
           <article className="ri-metric" key={title}>

@@ -316,7 +316,7 @@ export class ImportWorker {
           }
         }
         if (state.selection && work.kind === 'users') {
-          const match = await owners.match(record);
+          const match = await owners.match(record, state.accountKey);
           state.owners ??= {};
           if (match.sourceId) state.owners[match.sourceId] = match;
         }

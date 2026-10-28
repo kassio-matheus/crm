@@ -7,9 +7,11 @@ import { ImportButton } from './import-button';
 export const ImportOwnerPanel = ({
   owners,
   dryRun,
+  checkedAt,
 }: {
   owners?: Record<string, ImportOwnerMatch>;
   dryRun: boolean;
+  checkedAt?: string;
 }) => {
   const [expanded, setExpanded] = useState(false);
   const rows = Object.values(owners ?? {});
@@ -33,17 +35,20 @@ export const ImportOwnerPanel = ({
         </Tag>
       </div>
       <p className="ri-muted">
-        A correspondência usa o e-mail, ignorando maiúsculas e espaços nas
-        pontas. Negociações recebem o proprietário; empresas, o responsável;
-        tarefas com um único responsável recebem o membro correspondente.
-        Contatos mantêm seus vínculos com empresas e negociações.
+        A correspondência usa o e-mail ou um vínculo explícito confirmado pelo
+        administrador quando os e-mails são diferentes. Negociações recebem o
+        proprietário; empresas, o responsável; tarefas com um único responsável
+        recebem o membro correspondente. Contatos mantêm seus vínculos com
+        empresas e negociações.
       </p>
       <p className="ri-fine-print">
-        {!rows.length
-          ? 'Os usuários e suas correspondências aparecerão após a próxima simulação.'
-          : dryRun
-            ? 'Esta conferência não altera registros. Os vínculos serão refeitos ao criar a amostra.'
-            : 'Conferência dos membros no momento desta criação; uma nova simulação atualiza a lista.'}{' '}
+        {checkedAt
+          ? `Conferência atualizada em ${new Date(checkedAt).toLocaleTimeString('pt-BR')}. ${dryRun ? 'A simulação não altera proprietários.' : 'Os vínculos salvos são usados na importação e na repetição de registros sem proprietário.'}`
+          : !rows.length
+            ? 'Os usuários e suas correspondências aparecerão após a próxima simulação.'
+            : dryRun
+              ? 'Esta conferência não altera registros. Os vínculos serão refeitos ao criar a amostra.'
+              : 'Conferência dos membros desta criação.'}{' '}
         Membros ausentes ou e-mails ambíguos deixam o vínculo vazio, sem
         atribuir a outra pessoa. Tarefas com vários responsáveis no RD mantêm a
         lista no registro de origem, pois o Twenty admite um responsável por
@@ -92,11 +97,30 @@ export const ImportOwnerPanel = ({
                         color={row.status === 'matched' ? 'green' : 'orange'}
                       >
                         {row.status === 'matched'
-                          ? 'Membro encontrado'
+                          ? row.matchMethod === 'explicit'
+                            ? 'Vínculo confirmado'
+                            : 'E-mail correspondente'
                           : row.status === 'ambiguous'
                             ? 'E-mail ambíguo'
                             : 'Não encontrado'}
                       </Tag>
+                      {row.memberId && (
+                        <p
+                          className="ri-muted ri-tiny"
+                          style={{ overflowWrap: 'anywhere' }}
+                        >
+                          {row.memberName || 'Membro do Twenty'}
+                          <br />
+                          {row.memberEmail}
+                        </p>
+                      )}
+                      {row.matchMethod === 'explicit' &&
+                        row.status !== 'matched' && (
+                          <p className="ri-muted ri-tiny">
+                            O membro do vínculo salvo não está disponível.
+                            Revise a correspondência.
+                          </p>
+                        )}
                     </td>
                   </tr>
                 ))}

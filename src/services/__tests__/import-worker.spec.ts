@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImportPreviewLedger } from '../import-preview-ledger';
 import { ImportWorker } from '../import-worker';
+import { ImportOwners } from '../import-owners';
 import type { ImportCoordinator } from '../import-coordinator';
 import type { RecordImporter } from '../record-importer';
 import type { ImportState } from 'src/types/import-state';
@@ -17,6 +18,11 @@ vi.mock('twenty-sdk/logic-function', () => ({
   kv: { get: mocks.get, set: mocks.set },
   enqueueJobs: vi.fn(),
   getJobs: vi.fn(),
+}));
+vi.mock('src/services/import-owner-mappings', () => ({
+  ImportOwnerMappings: class {
+    read = async () => new Map();
+  },
 }));
 const initial = (): ImportState => ({
   id: 'run',
@@ -277,6 +283,37 @@ describe('recent sample and complete date windows', () => {
         Date.UTC(2026, 9, 23, 0, 0, 25 - index),
       ).toISOString(),
     }));
+  it('checks simulated source users against the mapping for the current company', async () => {
+    credentials();
+    const current = { ...recent(), plan: ['users'] };
+    const { worker, state, importer } = setup(current);
+    importer.import.mockResolvedValue('skipped');
+    const user = { id: 'rd-user', email: 'old@example.com' };
+    const match = {
+      sourceId: 'rd-user',
+      name: 'Owner',
+      email: 'old@example.com',
+      memberId: 'member',
+      status: 'matched' as const,
+      matchMethod: 'explicit' as const,
+    };
+    const spy = vi
+      .spyOn(ImportOwners.prototype, 'match')
+      .mockResolvedValue(match);
+    mocks.list.mockResolvedValue({
+      records: [user],
+      hasMore: false,
+      next: null,
+    });
+    try {
+      await worker.run({});
+      expect(spy).toHaveBeenCalledWith(user, 'acme');
+      expect(state.owners?.['rd-user']).toEqual(match);
+      expect(state.created).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
   it('stores exactly the recent selection and never follows the rest of the list', async () => {
     credentials();
     const { worker, state, importer } = setup(recent());

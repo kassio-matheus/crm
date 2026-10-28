@@ -1,24 +1,46 @@
 import { CoreApiClient } from 'twenty-client-sdk/core';
 import type { ImportOwnerMatch } from 'src/types/import-owner-match';
 import { sourceId } from 'src/utils/source-id.util';
+import { ImportOwnerMappings } from 'src/services/import-owner-mappings';
 
 /** Resolve existing workspace members only. Never invites users or changes access. */
 export class ImportOwners {
   private members?: Promise<Map<string, string[]>>;
+  private memberDetails = new Map<string, { email: string; name: string }>();
+  private mappings: ImportOwnerMappings;
   constructor(
     private client = new CoreApiClient(),
     private catalog?: Record<string, ImportOwnerMatch>,
-  ) {}
+  ) {
+    this.mappings = new ImportOwnerMappings(client);
+  }
 
-  async match(user: Record<string, unknown>): Promise<ImportOwnerMatch> {
+  async match(
+    user: Record<string, unknown>,
+    account: string,
+  ): Promise<ImportOwnerMatch> {
+    const id = String(user.id ?? user._id ?? '');
     const email =
       typeof user.email === 'string' ? user.email.trim().toLowerCase() : '';
-    const ids = email ? ((await this.memberIndex()).get(email) ?? []) : [];
+    const mapped = (await this.mappings.read(account)).get(id);
+    const members =
+      email || mapped ? await this.memberIndex() : new Map<string, string[]>();
+    const ids = mapped
+      ? this.memberDetails.has(mapped)
+        ? [mapped]
+        : []
+      : email
+        ? (members.get(email) ?? [])
+        : [];
+    const member =
+      ids.length === 1 ? this.memberDetails.get(ids[0]) : undefined;
     return {
-      sourceId: String(user.id ?? user._id ?? ''),
+      sourceId: id,
       name: String(user.name ?? ''),
       email,
       memberId: ids.length === 1 ? ids[0] : null,
+      matchMethod: mapped ? 'explicit' : 'email',
+      ...(member ? { memberName: member.name, memberEmail: member.email } : {}),
       status:
         ids.length === 1 ? 'matched' : ids.length ? 'ambiguous' : 'missing',
     };
@@ -47,11 +69,14 @@ export class ImportOwners {
     if (distinct.length !== 1) return null;
     const current = this.catalog?.[distinct[0]];
     if (current)
-      return this.match({
-        id: current.sourceId,
-        name: current.name,
-        email: current.email,
-      });
+      return this.match(
+        {
+          id: current.sourceId,
+          name: current.name,
+          email: current.email,
+        },
+        account,
+      );
     const result = await this.client.query({
       rdSourceRecords: {
         __args: {
@@ -63,7 +88,7 @@ export class ImportOwners {
     });
     const user = result.rdSourceRecords!.edges[0]?.node.sourcePayload as
       Record<string, unknown> | undefined;
-    return user ? this.match(user) : null;
+    return user ? this.match(user, account) : null;
   }
 
   async fillMissing(
@@ -113,13 +138,24 @@ export class ImportOwners {
         const result = await this.client.query({
           workspaceMembers: {
             __args: { first: 100, after, orderBy: [{ id: 'AscNullsLast' }] },
-            edges: { cursor: true, node: { id: true, userEmail: true } },
+            edges: {
+              cursor: true,
+              node: {
+                id: true,
+                userEmail: true,
+                name: { firstName: true, lastName: true },
+              },
+            },
             pageInfo: { hasNextPage: true, endCursor: true },
           },
         });
         const page = result.workspaceMembers!;
         for (const { node } of page.edges) {
           const email = node.userEmail?.trim().toLowerCase();
+          this.memberDetails.set(node.id, {
+            email: email ?? '',
+            name: `${node.name?.firstName ?? ''} ${node.name?.lastName ?? ''}`.trim(),
+          });
           if (email)
             index.set(email, [
               ...new Set([...(index.get(email) ?? []), node.id]),

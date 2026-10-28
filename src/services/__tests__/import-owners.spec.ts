@@ -1,7 +1,14 @@
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import type { CoreApiClient } from 'twenty-client-sdk/core';
 import { ImportOwners } from '../import-owners';
 import { sourceId } from 'src/utils/source-id.util';
+const mappings = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock('src/services/import-owner-mappings', () => ({
+  ImportOwnerMappings: class {
+    read = mappings.read;
+  },
+}));
+beforeEach(() => mappings.read.mockReset().mockResolvedValue(new Map()));
 
 const memberPage = (
   rows: { id: string; userEmail: string }[],
@@ -33,13 +40,16 @@ it('matches a unique normalized email, paginates all members and caches the batc
     );
   const owners = new ImportOwners(api.client);
   expect(
-    await owners.match({ id: 'rd-user', email: ' OWNER@example.COM ' }),
+    await owners.match(
+      { id: 'rd-user', email: ' OWNER@example.COM ' },
+      'account',
+    ),
   ).toMatchObject({
     memberId: 'member',
     email: 'owner@example.com',
     status: 'matched',
   });
-  await owners.match({ id: 'rd-user', email: 'owner@example.com' });
+  await owners.match({ id: 'rd-user', email: 'owner@example.com' }, 'account');
   expect(api.query).toHaveBeenCalledTimes(2);
   expect(api.query.mock.calls[1][0].workspaceMembers.__args.after).toBe('next');
   expect(api.mutation).not.toHaveBeenCalled();
@@ -53,15 +63,19 @@ it('never guesses by name or assigns an ambiguous email', async () => {
     ]),
   );
   const owners = new ImportOwners(api.client);
-  expect(await owners.match({ name: 'Same name' })).toMatchObject({
+  expect(await owners.match({ name: 'Same name' }, 'account')).toMatchObject({
     status: 'missing',
     memberId: null,
   });
-  expect(await owners.match({ email: 'owner@example.com' })).toMatchObject({
+  expect(
+    await owners.match({ email: 'owner@example.com' }, 'account'),
+  ).toMatchObject({
     status: 'ambiguous',
     memberId: null,
   });
-  expect(await owners.match({ email: 'missing@example.com' })).toMatchObject({
+  expect(
+    await owners.match({ email: 'missing@example.com' }, 'account'),
+  ).toMatchObject({
     status: 'missing',
     memberId: null,
   });
@@ -70,7 +84,7 @@ it('fails closed if workspace-member pagination does not advance', async () => {
   const api = setup();
   api.query.mockResolvedValue(memberPage([], true, 'repeated'));
   await expect(
-    new ImportOwners(api.client).match({ email: 'x@example.com' }),
+    new ImportOwners(api.client).match({ email: 'x@example.com' }, 'account'),
   ).rejects.toThrow('RD_OWNER_MEMBER_PAGE_CHANGED');
 });
 it.each([
@@ -107,6 +121,46 @@ it.each([
     ).toBe('account:users:user');
   },
 );
+
+it('uses a confirmed source ID mapping when the member email differs, including simulation matching', async () => {
+  const api = setup();
+  mappings.read.mockResolvedValue(new Map([['old-rd-user', 'member']]));
+  api.query.mockResolvedValue(
+    memberPage([{ id: 'member', userEmail: 'new@example.com' }]),
+  );
+  const result = await new ImportOwners(api.client).match(
+    { id: 'old-rd-user', email: 'old@example.com', name: 'Confirmed' },
+    'account',
+  );
+  expect(result).toMatchObject({
+    memberId: 'member',
+    status: 'matched',
+    matchMethod: 'explicit',
+    email: 'old@example.com',
+    memberEmail: 'new@example.com',
+  });
+  expect(mappings.read).toHaveBeenCalledWith('account');
+  expect(api.mutation).not.toHaveBeenCalled();
+});
+
+it('does not fall back to a different email match when a confirmed member is no longer available', async () => {
+  const api = setup();
+  mappings.read.mockResolvedValue(new Map([['rd-user', 'removed-member']]));
+  api.query.mockResolvedValue(
+    memberPage([{ id: 'other', userEmail: 'old@example.com' }]),
+  );
+  expect(
+    await new ImportOwners(api.client).match(
+      { id: 'rd-user', email: 'old@example.com' },
+      'account',
+    ),
+  ).toMatchObject({
+    memberId: null,
+    status: 'missing',
+    matchMethod: 'explicit',
+  });
+  expect(api.mutation).not.toHaveBeenCalled();
+});
 it('uses the current catalog email instead of a stale historical snapshot', async () => {
   const api = setup();
   api.query.mockResolvedValue(

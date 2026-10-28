@@ -495,6 +495,10 @@ describe('owner association on record replay', () => {
               pageInfo: { hasNextPage: false },
             },
           };
+        if (request.rdSourceRecords.__args.filter.recordKind)
+          return {
+            rdSourceRecords: { edges: [], pageInfo: { hasNextPage: false } },
+          };
         if (request.rdSourceRecords.__args.filter.sourceKey)
           return {
             rdSourceRecords: {

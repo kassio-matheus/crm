@@ -41,5 +41,6 @@ export type ImportState = {
   preview?: ImportPreview;
   maintenance?: 'cleanup' | 'cleanupViews' | 'restore';
   owners?: Record<string, ImportOwnerMatch>;
+  ownersCheckedAt?: string;
   customFields?: Record<string, RdCustomField>;
 };

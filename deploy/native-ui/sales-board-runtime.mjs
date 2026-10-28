@@ -16,7 +16,7 @@ export const createSalesBoardUi = (host) => {
         variant: 'outline',
         'aria-label': 'Selecionar negociações desta fase',
         title: 'Selecionar todas as negociações desta fase',
-        style: { flexShrink: 0 },
+        style: { flexShrink: 0, width: 24, padding: 0 },
         'data-dnd-drag-disable': true,
         onPointerDown: (event) => event.stopPropagation(),
         onClick: (event) => {
@@ -30,7 +30,7 @@ export const createSalesBoardUi = (host) => {
           );
         },
       },
-      'Selecionar fase',
+      h(native.SelectionIcon, { size: 16 }),
     );
   };
   const FilterEffect = () => {

@@ -6,7 +6,8 @@ record fields, confirmation dialogs and permissions. The pinned adapter in
 
 ## Selecting a phase
 
-Each sales-stage column has a **Selecionar fase** button. It opens **Ações em
+Each sales-stage column has a native check icon button with the accessible name
+**Selecionar negociações desta fase** and a descriptive hover label. It opens **Ações em
 massa** for that phase AND every current board criterion (pipeline, owner,
 status and search). Selection paginates the Twenty API, including records not
 loaded in the board. Empty selections cannot execute a write.

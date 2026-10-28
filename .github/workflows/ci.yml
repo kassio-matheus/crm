@@ -57,6 +57,9 @@ jobs:
       - name: Unit tests
         run: yarn test:unit
 
+      - name: Native sales UI and deployment policies
+        run: yarn test:deployment
+
       - name: Run integration tests
         run: yarn test
         env:

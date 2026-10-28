@@ -17,6 +17,7 @@ import type { NativeSalesFilters } from 'src/types/native-sales-filters';
 
 const defaults: NativeSalesFilters = {
   pipelineId: '',
+  stageId: '',
   ownerId: '',
   status: 'ALL',
   sort: 'newest',
@@ -78,6 +79,14 @@ const SalesFilters = () => {
     setBusy(true);
     setError('');
     try {
+      if (
+        value.stageId &&
+        !options.stages.some(
+          (stage) =>
+            stage.id === value.stageId && stage.pipelineId === value.pipelineId,
+        )
+      )
+        throw new Error('Selected stage is outside the pipeline.');
       const prepared =
         value.pipelineId && value.mode === 'board'
           ? await new RestApiClient().post('/s/prepare-sales-pipeline', {
@@ -155,12 +164,29 @@ const SalesFilters = () => {
               const next = {
                 ...filters,
                 pipelineId: v,
+                stageId: '',
                 mode: v ? ('board' as const) : ('list' as const),
               };
               setFilters(next);
               void apply(next);
             }}
             disabled={busy}
+          />
+          <Picker
+            label="Etapa do funil"
+            value={filters.stageId || ''}
+            options={[
+              { value: '', label: 'Todas as etapas deste funil' },
+              ...options.stages
+                .filter((stage) => stage.pipelineId === filters.pipelineId)
+                .map((stage) => ({ value: stage.id, label: stage.name })),
+            ]}
+            onChange={(v) => {
+              const next = { ...filters, stageId: v };
+              setFilters(next);
+              void apply(next);
+            }}
+            disabled={busy || !filters.pipelineId}
           />
           {!options.pipelines.length && (
             <p>

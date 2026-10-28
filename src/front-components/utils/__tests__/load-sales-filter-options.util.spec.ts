@@ -29,6 +29,21 @@ describe('sales filter catalogs', () => {
         },
       })
       .mockResolvedValueOnce({
+        salesStages: {
+          edges: [
+            {
+              node: {
+                id: 's',
+                name: 'Proposta',
+                salesPipelineId: 'p',
+                sourceOrder: 1,
+              },
+            },
+          ],
+          pageInfo: { hasNextPage: false },
+        },
+      })
+      .mockResolvedValueOnce({
         workspaceMembers: {
           edges: [
             {
@@ -43,6 +58,9 @@ describe('sales filter catalogs', () => {
       metadata(),
     );
     expect(result.pipelines).toHaveLength(2);
+    expect(result.stages).toEqual([
+      { id: 's', name: 'Proposta', pipelineId: 'p', order: 1 },
+    ]);
     expect(result.members).toEqual([{ id: 'u', name: 'Ana Silva' }]);
     expect(query.mock.calls.every(([request]) => !request.opportunities)).toBe(
       true,
@@ -64,6 +82,21 @@ describe('sales filter catalogs', () => {
       .fn()
       .mockResolvedValueOnce({
         salesPipelines: { edges: [], pageInfo: { hasNextPage: false } },
+      })
+      .mockResolvedValueOnce({
+        salesStages: {
+          edges: [
+            {
+              node: {
+                id: 's',
+                name: 'Proposta',
+                salesPipelineId: 'p',
+                sourceOrder: 1,
+              },
+            },
+          ],
+          pageInfo: { hasNextPage: false },
+        },
       })
       .mockResolvedValueOnce({
         workspaceMembers: { edges: [], pageInfo: { hasNextPage: false } },

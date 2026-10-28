@@ -10,6 +10,19 @@ const defaults: NativeSalesFilters = {
 };
 const views = { board: 'native', pipelineBoard: 'pipeline', list: 'list' };
 describe('native sales URL filters', () => {
+  it('scopes a stage to its pipeline, preserving owner filters', () => {
+    const q = buildNativeSalesQuery(
+      { ...defaults, pipelineId: 'p', stageId: 's', ownerId: 'u' },
+      views,
+    );
+    expect(q['filterGroup[filters][1][field]']).toBe('salesStage');
+    expect(q['filterGroup[filters][1][value]']).toBe('[\"s\"]');
+    expect(q['filterGroup[filters][2][field]']).toBe('owner');
+  });
+  it('ignores obsolete stage selection without a pipeline', () => {
+    const q = buildNativeSalesQuery({ ...defaults, stageId: 's' }, views);
+    expect(Object.values(q)).not.toContain('salesStage');
+  });
   it('opens the native board and explicitly clears previous filters', () => {
     const q = buildNativeSalesQuery(defaults, views);
     expect(q.viewId).toBe('native');

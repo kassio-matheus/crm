@@ -49,6 +49,60 @@ export const loadSalesFilterOptions = async (
       throw new Error('Pipeline pagination did not advance.');
     cursor = next;
   } while (cursor);
+  const stages: {
+    id: string;
+    name: string;
+    pipelineId: string;
+    order: number;
+  }[] = [];
+  cursor = null;
+  do {
+    const result: {
+      salesStages?: {
+        edges: {
+          node: {
+            id: string;
+            name?: string | null;
+            salesPipelineId?: string | null;
+            sourceOrder?: number | null;
+          };
+        }[];
+        pageInfo: { hasNextPage: boolean; endCursor?: string | null };
+      };
+    } = await client.query({
+      salesStages: {
+        __args: {
+          first: 100,
+          after: cursor,
+          orderBy: [{ sourceOrder: 'AscNullsLast' }, { id: 'AscNullsLast' }],
+        },
+        edges: {
+          node: {
+            id: true,
+            name: true,
+            salesPipelineId: true,
+            sourceOrder: true,
+          },
+        },
+        pageInfo: { hasNextPage: true, endCursor: true },
+      },
+    });
+    const page = result.salesStages!;
+    stages.push(
+      ...page.edges.map(({ node }) => ({
+        id: node.id,
+        name: node.name || 'Sem nome',
+        pipelineId: node.salesPipelineId || '',
+        order: node.sourceOrder ?? Infinity,
+      })),
+    );
+    const next: string | null = page.pageInfo.hasNextPage
+      ? (page.pageInfo.endCursor ?? null)
+      : null;
+    if (page.pageInfo.hasNextPage && (!next || next === cursor))
+      throw new Error('Stage pagination did not advance.');
+    cursor = next;
+  } while (cursor);
   const members: { id: string; name: string }[] = [];
   cursor = null;
   do {
@@ -92,6 +146,7 @@ export const loadSalesFilterOptions = async (
   } while (cursor);
   return {
     pipelines,
+    stages,
     members,
     views: {
       board: resolveView(NATIVE_SALES.board),

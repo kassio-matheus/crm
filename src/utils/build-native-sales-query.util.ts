@@ -25,6 +25,12 @@ export const buildNativeSalesQuery = (
       op: 'IS',
       value: JSON.stringify([filters.pipelineId]),
     });
+  if (filters.pipelineId && filters.stageId)
+    roots.push({
+      field: 'salesStage',
+      op: 'IS',
+      value: JSON.stringify([filters.stageId]),
+    });
   if (filters.ownerId)
     roots.push({
       field: 'owner',

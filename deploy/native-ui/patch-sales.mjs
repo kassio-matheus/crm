@@ -84,8 +84,8 @@ export const patchSalesBoard = (source) => {
   );
   next = replaceOnce(
     next,
-    'g&&(0,s.jsx)(nw,{})]})},Sw=',
-    '(0,s.jsx)(crmSalesBoard.Button,{stageId:i?.name==="salesStage"?e.value:null}),g&&(0,s.jsx)(nw,{})]})},Sw=',
+    '})})]}),!l&&(0,s.jsxs)(gw,{',
+    '})})]}),(0,s.jsx)(crmSalesBoard.Button,{stageId:i?.name==="salesStage"?e.value:null}),!l&&(0,s.jsxs)(gw,{',
   );
   next = replaceOnce(
     next,

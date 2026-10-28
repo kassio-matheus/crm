@@ -15,6 +15,8 @@ export const createSalesBoardUi = (host) => {
         size: 'sm',
         variant: 'outline',
         'aria-label': 'Selecionar negociações desta fase',
+        title: 'Selecionar todas as negociações desta fase',
+        style: { flexShrink: 0 },
         'data-dnd-drag-disable': true,
         onPointerDown: (event) => event.stopPropagation(),
         onClick: (event) => {

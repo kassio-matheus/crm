@@ -102,6 +102,12 @@ export const validateMove = (action, pipelineId, stageId, stages) => {
   return { salesPipelineId: pipelineId, salesStageId: stageId };
 };
 
+export const validateOwner = (ownerId, members) => {
+  if (!ownerId || !members?.some((member) => member.id === ownerId))
+    throw new Error('Escolha um membro válido da equipe como proprietário.');
+  return { ownerId };
+};
+
 export const printField = (field) => {
   const parts = {
     CURRENCY: 'amountMicros currencyCode',

@@ -6,6 +6,7 @@ import {
   readSnapshot,
   copyDeal,
   validateMove,
+  validateOwner,
   printField,
   stagePickerFilter,
   assertBatchResult,
@@ -15,6 +16,14 @@ import {
 } from './sales-bulk-policy.mjs';
 
 const stage = '00000000-0000-4000-8000-000000000001';
+test('owner changes require an available native member and update only ownerId', () => {
+  const members = [{ id: stage, name: 'Team member' }];
+  assert.deepEqual(validateOwner(stage, members), { ownerId: stage });
+  for (const ownerId of ['', 'rd-user-id', 'unknown-member'])
+    assert.throws(() => validateOwner(ownerId, members), /membro válido/);
+  assert.throws(() => validateOwner(stage, null), /membro válido/);
+  assert.throws(() => validateOwner(stage, []), /membro válido/);
+});
 test('only the retired opportunity fields are hidden; other objects and real pipeline relations remain available', () => {
   for (const field of ['stage', 'salesPipelineKey', 'salesStageKey'])
     assert.equal(isOperationalSalesField('opportunity', field), false);

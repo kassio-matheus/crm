@@ -7,6 +7,7 @@ export const createSalesBulkUi = (host) => {
   const labels = {
     pipeline: 'Alterar funil',
     stage: 'Alterar fase do funil',
+    owner: 'Alterar proprietário',
     duplicate: 'Duplicar',
     delete: 'Excluir',
     fields: 'Atualizar campos em massa',
@@ -104,7 +105,7 @@ export const createSalesBulkUi = (host) => {
               ),
           ),
           !options.length &&
-            h(Dropdown.Empty, null, 'Nenhuma etapa disponível'),
+            h(Dropdown.Empty, null, 'Nenhuma opção disponível'),
         ),
       ),
     );
@@ -134,6 +135,8 @@ export const createSalesBulkUi = (host) => {
     const [rows, setRows] = React.useState(null);
     const [pipeline, setPipeline] = React.useState('');
     const [stage, setStage] = React.useState('');
+    const [ownerId, setOwnerId] = React.useState('');
+    const [members, setMembers] = React.useState(null);
     const [busy, setBusy] = React.useState(false);
     const [error, setError] = React.useState('');
     const [progress, setProgress] = React.useState(0);
@@ -235,6 +238,46 @@ export const createSalesBulkUi = (host) => {
       };
     }, []);
 
+    React.useEffect(() => {
+      if (action !== 'owner' || members !== null) return;
+      let active = true;
+      const loadMembers = async () => {
+        const records = await readSnapshot(async ({ after }) => {
+          const result = await client.query({
+            query: host.gql(
+              'query CrmBulkOwners($after:String){workspaceMembers(first:100,after:$after,orderBy:[{id:AscNullsLast}]){edges{node{id name{firstName lastName}}}pageInfo{hasNextPage endCursor}}}',
+            ),
+            variables: { after },
+            fetchPolicy: 'network-only',
+          });
+          return result.data.workspaceMembers;
+        }, {});
+        if (active)
+          setMembers(
+            records
+              .map((member) => ({
+                id: member.id,
+                name:
+                  [member.name?.firstName, member.name?.lastName]
+                    .filter(Boolean)
+                    .join(' ') || 'Sem nome',
+              }))
+              .sort((a, b) => a.name.localeCompare(b.name)),
+          );
+      };
+      void loadMembers().catch(() => {
+        if (active) {
+          setMembers([]);
+          setError(
+            'Não foi possível carregar os membros da equipe. Reabra o painel para tentar novamente.',
+          );
+        }
+      });
+      return () => {
+        active = false;
+      };
+    }, [action, members]);
+
     const canRun =
       action === 'duplicate'
         ? permissions?.canUpdateObjectRecords && object.isUICreatable
@@ -254,6 +297,7 @@ export const createSalesBulkUi = (host) => {
       try {
         if (action === 'pipeline' || action === 'stage')
           validateMove(action, pipeline, stage, catalog.stages);
+        if (action === 'owner') validateOwner(ownerId, members);
       } catch (failure) {
         setError(failure.message);
         return;
@@ -267,6 +311,7 @@ export const createSalesBulkUi = (host) => {
       setProgress(0);
       setError('');
       let completed = 0;
+      let writesStarted = false;
       try {
         // Freeze IDs BEFORE any mutation. Moving/deleting records cannot skip a
         // cursor page, and duplicates can never become input to their own job.
@@ -307,6 +352,21 @@ export const createSalesBulkUi = (host) => {
           );
         }
         let data = values;
+        if (action === 'owner') {
+          // Resolve the native workspace member again after confirmation. Never
+          // assign an RD user ID or replay stale membership from the picker.
+          const result = await client.query({
+            query: host.gql(
+              'query CrmValidateOwner($id:UUID!){workspaceMember(filter:{id:{eq:$id}}){id}}',
+            ),
+            variables: { id: ownerId },
+            fetchPolicy: 'network-only',
+          });
+          data = validateOwner(
+            ownerId,
+            result.data.workspaceMember ? [result.data.workspaceMember] : [],
+          );
+        }
         if (action === 'pipeline' || action === 'stage') {
           // Recheck the relationship immediately before writing, after confirmation.
           const result = await client.query({
@@ -326,6 +386,7 @@ export const createSalesBulkUi = (host) => {
         for (let offset = 0; offset < sourceRows.length; offset += 25) {
           const batch = sourceRows.slice(offset, offset + 25),
             ids = batch.map((row) => row.id);
+          writesStarted = true;
           if (action === 'delete')
             await deleteManyRecords({ recordIdsToDelete: ids });
           else if (action === 'duplicate') {
@@ -354,7 +415,9 @@ export const createSalesBulkUi = (host) => {
         });
       } catch {
         setError(
-          `A operação parou com ${completed} de ${rows.length} negociações confirmadas. O lote atual pode ter alterações parciais. Confira os registros antes de tentar novamente; as alterações concluídas foram mantidas.`,
+          action === 'owner' && !writesStarted
+            ? 'Não foi possível validar o proprietário na equipe. Nenhuma negociação foi alterada. Reabra o painel e selecione um membro disponível.'
+            : `A operação parou com ${completed} de ${rows.length} negociações confirmadas. O lote atual pode ter alterações parciais. Confira os registros antes de tentar novamente; as alterações concluídas foram mantidas.`,
         );
         // Never replay a partially completed duplicate job from the same panel.
         setFinished(true);
@@ -423,9 +486,23 @@ export const createSalesBulkUi = (host) => {
           !rows &&
             h(Button, { onClick: () => void load() }, 'Tentar novamente'),
         ),
-      ...['pipeline', 'stage', 'duplicate', 'delete', 'fields'].map(
+      ...['pipeline', 'stage', 'owner', 'duplicate', 'delete', 'fields'].map(
         actionButton,
       ),
+      action === 'owner' &&
+        h(
+          React.Fragment,
+          null,
+          members === null &&
+            h('span', { role: 'status' }, 'Carregando membros da equipe…'),
+          h(Picker, {
+            label: 'Proprietário de destino',
+            value: ownerId,
+            options: members || [],
+            onChange: setOwnerId,
+            disabled: busy || finished || !members?.length,
+          }),
+        ),
       action === 'fields' &&
         h(Form, {
           objectNameSingular: 'opportunity',
@@ -495,6 +572,8 @@ export const createSalesBulkUi = (host) => {
                   busy ||
                   !rows?.length ||
                   !canRun ||
+                  (action === 'owner' &&
+                    !members?.some((member) => member.id === ownerId)) ||
                   (action === 'fields' &&
                     !Object.values(values).some(
                       (value) => value !== undefined,
@@ -509,13 +588,15 @@ export const createSalesBulkUi = (host) => {
         dialogId,
         title: `${labels[action] || 'Ação'} em ${rows?.length || 0} ${rows?.length === 1 ? 'negociação' : 'negociações'}?`,
         subtitle:
-          action === 'duplicate'
-            ? 'Serão criadas novas negociações. Os registros originais serão preservados.'
-            : action === 'delete'
-              ? 'Os registros selecionados serão enviados para a lixeira.'
-              : action === 'fields'
-                ? 'Somente os campos preenchidos serão atualizados nos registros selecionados.'
-                : `Destino: ${catalog.pipelines.find((item) => item.id === pipeline)?.name || ''} / ${targetStages.find((item) => item.id === stage)?.name || ''}. Confira a seleção antes de confirmar.`,
+          action === 'owner'
+            ? `Novo proprietário: ${members?.find((member) => member.id === ownerId)?.name || ''}. Somente o proprietário das negociações selecionadas será alterado.`
+            : action === 'duplicate'
+              ? 'Serão criadas novas negociações. Os registros originais serão preservados.'
+              : action === 'delete'
+                ? 'Os registros selecionados serão enviados para a lixeira.'
+                : action === 'fields'
+                  ? 'Somente os campos preenchidos serão atualizados nos registros selecionados.'
+                  : `Destino: ${catalog.pipelines.find((item) => item.id === pipeline)?.name || ''} / ${targetStages.find((item) => item.id === stage)?.name || ''}. Confira a seleção antes de confirmar.`,
         onConfirmClick: execute,
         confirmButtonText: labels[action] || 'Confirmar',
         confirmButtonColor: action === 'delete' ? 'danger' : 'accent',

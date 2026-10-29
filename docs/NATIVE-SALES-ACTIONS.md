@@ -23,9 +23,17 @@ Actions appear in this order:
 
 1. Change pipeline, with a required destination stage.
 2. Change sales stage.
-3. Duplicate.
-4. Soft delete to Twenty's recoverable trash.
-5. Update other fields, in a collapsed native field form.
+3. Change owner.
+4. Duplicate.
+5. Soft delete to Twenty's recoverable trash.
+6. Update other fields, in a collapsed native field form.
+
+Owner changes use a searchable, paginated catalog of native workspace members.
+The operator must choose a member and confirm the selection. Membership is
+checked again immediately before the first write, and only `ownerId` is updated.
+The source owner in the RD snapshot and all other deal values remain unchanged.
+Record update permissions, frozen selection and batch confirmation apply to this
+action too; it never makes an RD request or changes import owner mappings.
 
 Pipeline/stage moves re-read the destination stage immediately before writing
 and set both native relations together. All writes use the signed-in user's

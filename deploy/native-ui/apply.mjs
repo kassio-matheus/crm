@@ -16,7 +16,7 @@ import {
   patchSalesPicker,
 } from './patch-sales.mjs';
 
-const revision = 'crm-sales-bulk-v5';
+const revision = 'crm-sales-bulk-v6';
 const bundle = 'RecordIndexPage-D8zcMDY8.js';
 const expectedSha256 =
   'b547da8d7d93a54d5ac6373d74edaea3ddd1fa784a15582fb11a147cf05777ce';

@@ -49,7 +49,7 @@ export default defineView({
       fieldMetadataUniversalIdentifier:
         objects.opportunity.fields.amount.universalIdentifier,
       position: 4,
-      isVisible: true,
+      isVisible: false,
       size: 180,
     },
     {
@@ -71,7 +71,7 @@ export default defineView({
       universalIdentifier: '9d0d3ab1-4192-440f-84c3-3badf4c0e5f6',
       fieldMetadataUniversalIdentifier: '9ff18b50-b15c-475b-b0ed-9e104000a470',
       position: 7,
-      isVisible: true,
+      isVisible: false,
       size: 180,
     },
     {

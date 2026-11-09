@@ -157,18 +157,37 @@ export const assertBatchResult = (records, ids) => {
 
 export const isOperationalSalesField = (objectName, fieldName) =>
   objectName !== 'opportunity' ||
-  !['stage', 'salesPipelineKey', 'salesStageKey'].includes(fieldName);
+  ![
+    'stage',
+    'salesPipelineKey',
+    'salesStageKey',
+    'qualification',
+    'amount',
+    'closeDate',
+    'nextActivityAt',
+    'lastContactAt',
+    'rdCreatedAt',
+    'rdOwnerId',
+    'rdOwnerName',
+    'rdLeadSourceId',
+    'rdCampaignId',
+    'rdUpdatedAt',
+    'rdOneTimeAmount',
+    'rdRecurringAmount',
+    'rdOriginalData',
+    'rdSourceKey',
+  ].includes(fieldName);
 
 export const salesFilterPredicate = (value) => {
   const and = [];
   if (value.pipelineId) and.push({ salesPipelineId: { eq: value.pipelineId } });
   if (value.pipelineId && value.stageId)
     and.push({ salesStageId: { eq: value.stageId } });
-  if (value.ownerId)
-    and.push({
-      ownerId:
-        value.ownerId === 'UNASSIGNED' ? { is: 'NULL' } : { eq: value.ownerId },
-    });
+  if (value.ownerId === 'UNASSIGNED') and.push({ ownerId: { is: 'NULL' } });
+  else if (value.ownerIds?.length > 1)
+    and.push({ ownerId: { in: value.ownerIds } });
+  else if (value.ownerId || value.ownerIds?.length)
+    and.push({ ownerId: { eq: value.ownerId || value.ownerIds[0] } });
   if (['ONGOING', 'WON'].includes(value.status))
     and.push({
       or: [
@@ -195,6 +214,62 @@ export const salesFilterPredicate = (value) => {
   return and.length ? { and } : {};
 };
 
+export const salesStatusCriteria = (status) => {
+  const filters = [];
+  const groups = [];
+  if (['ONGOING', 'WON'].includes(status)) {
+    const explicit = {
+      field: 'dealStatus',
+      op: 'IS',
+      value: JSON.stringify([status]),
+    };
+    groups.push({
+      operator: 'OR',
+      filters: [explicit, { field: 'dealStatus', op: 'IS_EMPTY', value: '' }],
+    });
+    groups.push({
+      operator: 'OR',
+      filters: [
+        explicit,
+        {
+          field: 'stage',
+          op: status === 'WON' ? 'IS' : 'IS_NOT',
+          value: '["CUSTOMER"]',
+        },
+      ],
+    });
+  } else if (status === 'NOT_PAUSED')
+    groups.push({
+      operator: 'OR',
+      filters: [
+        { field: 'dealStatus', op: 'IS_NOT', value: '["PAUSED"]' },
+        { field: 'dealStatus', op: 'IS_EMPTY', value: '' },
+      ],
+    });
+  else if (status !== 'ALL')
+    filters.push({
+      field: 'dealStatus',
+      op: 'IS',
+      value: JSON.stringify([status]),
+    });
+  return { operator: 'AND', filters, groups };
+};
+
+export const salesSortChoices = (created) => ({
+  newest: [created, 'DESC', 'Criadas por último'],
+  oldest: [created, 'ASC', 'Criadas primeiro'],
+  nameAsc: ['name', 'ASC', 'Alfabética A–Z'],
+  nameDesc: ['name', 'DESC', 'Alfabética Z–A'],
+  nextTask: ['nextActivityAt', 'ASC', 'Data da próxima tarefa'],
+  closeDate: ['closeDate', 'ASC', 'Previsão de fechamento'],
+  lastContact: ['lastContactAt', 'DESC', 'Contato mais recente'],
+  oldestContact: ['lastContactAt', 'ASC', 'Contato mais antigo'],
+  rating: ['qualification', 'DESC', 'Mais qualificadas'],
+  lowRating: ['qualification', 'ASC', 'Menos qualificadas'],
+  highValue: ['amount', 'DESC', 'Maior valor total'],
+  lowValue: ['amount', 'ASC', 'Menor valor total'],
+});
+
 export const salesFilterQuery = (value, listViewId) => {
   const query = {
     viewId:
@@ -210,37 +285,16 @@ export const salesFilterQuery = (value, listViewId) => {
   if (value.pipelineId && value.stageId) add('salesStage', value.stageId);
   if (value.ownerId === 'UNASSIGNED')
     filters.push({ field: 'owner', op: 'IS_EMPTY', value: '' });
-  else if (value.ownerId) add('owner', value.ownerId);
-  if (['ONGOING', 'WON'].includes(value.status)) {
-    const explicit = {
-      field: 'dealStatus',
+  else if (value.ownerIds?.length)
+    filters.push({
+      field: 'owner',
       op: 'IS',
-      value: JSON.stringify([value.status]),
-    };
-    groups.push({
-      operator: 'OR',
-      filters: [explicit, { field: 'dealStatus', op: 'IS_EMPTY', value: '' }],
+      value: JSON.stringify(value.ownerIds),
     });
-    groups.push({
-      operator: 'OR',
-      filters: [
-        explicit,
-        {
-          field: 'stage',
-          op: value.status === 'WON' ? 'IS' : 'IS_NOT',
-          value: '["CUSTOMER"]',
-        },
-      ],
-    });
-  } else if (value.status === 'NOT_PAUSED')
-    groups.push({
-      operator: 'OR',
-      filters: [
-        { field: 'dealStatus', op: 'IS_NOT', value: '["PAUSED"]' },
-        { field: 'dealStatus', op: 'IS_EMPTY', value: '' },
-      ],
-    });
-  else if (value.status !== 'ALL') add('dealStatus', value.status);
+  else if (value.ownerId) add('owner', value.ownerId);
+  const statusCriteria = salesStatusCriteria(value.status);
+  filters.push(...statusCriteria.filters);
+  groups.push(...statusCriteria.groups);
   if (!filters.length && !groups.length)
     filters.push({ field: 'id', op: 'IS_NOT_EMPTY', value: '' });
   const flatten = (object, key) => {
@@ -255,17 +309,7 @@ export const salesFilterQuery = (value, listViewId) => {
     'filterGroup',
   );
   const created = value.pipelineId ? 'rdCreatedAt' : 'createdAt';
-  const sorts = {
-    newest: [created, 'DESC'],
-    oldest: [created, 'ASC'],
-    nameAsc: ['name', 'ASC'],
-    nameDesc: ['name', 'DESC'],
-    nextTask: ['nextActivityAt', 'ASC'],
-    closeDate: ['closeDate', 'ASC'],
-    lastContact: ['lastContactAt', 'DESC'],
-    oldestContact: ['lastContactAt', 'ASC'],
-    rating: ['qualification', 'DESC'],
-  };
+  const sorts = salesSortChoices(created);
   const [field, direction] = sorts[value.sort] || sorts.newest;
   query[`sort[${field}]`] = direction;
   query['sort[id]'] = 'ASC';

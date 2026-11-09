@@ -21,6 +21,9 @@ for (const name of [
   'sales-bulk-runtime.mjs',
   'sales-board-runtime.mjs',
   'sales-filters-runtime.mjs',
+  'sales-toolbar-runtime.mjs',
+  'sales-toolbar-policy.mjs',
+  'contact-phone-search.mjs',
 ])
   docker(
     'cp',

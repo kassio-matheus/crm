@@ -25,13 +25,23 @@ test('owner changes require an available native member and update only ownerId',
   assert.throws(() => validateOwner(stage, []), /membro válido/);
 });
 test('only the retired opportunity fields are hidden; other objects and real pipeline relations remain available', () => {
-  for (const field of ['stage', 'salesPipelineKey', 'salesStageKey'])
+  for (const field of [
+    'stage',
+    'salesPipelineKey',
+    'salesStageKey',
+    'qualification',
+    'amount',
+    'closeDate',
+    'rdOriginalData',
+    'nextActivityAt',
+  ])
     assert.equal(isOperationalSalesField('opportunity', field), false);
   for (const field of [
     'salesPipeline',
     'salesStage',
     'dealStatus',
-    'qualification',
+    'dealFullName',
+    'dealAddress',
   ])
     assert.equal(isOperationalSalesField('opportunity', field), true);
   assert.equal(isOperationalSalesField('project', 'stage'), true);

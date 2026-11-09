@@ -30,7 +30,8 @@ export const createSalesFiltersUi = (host) => {
     const [value, setValue] = React.useState(() => ({
       pipelineId: currentIds('salesPipeline')[0] || '',
       stageId: currentIds('salesStage')[0] || '',
-      ownerId: currentIds('owner')[0] || '',
+      ownerId: '',
+      ownerIds: currentIds('owner'),
       status: currentIds('dealStatus')[0] || 'ALL',
       sort: 'newest',
       mode: currentIds('salesPipeline').length ? 'board' : 'list',
@@ -120,7 +121,14 @@ export const createSalesFiltersUi = (host) => {
         active = false;
         clearTimeout(timeout);
       };
-    }, [catalog, value.pipelineId, value.stageId, value.ownerId, value.status]);
+    }, [
+      catalog,
+      value.pipelineId,
+      value.stageId,
+      value.ownerId,
+      value.ownerIds,
+      value.status,
+    ]);
     const apply = () => {
       if (!catalog) return;
       if (
@@ -141,12 +149,19 @@ export const createSalesFiltersUi = (host) => {
     const pick = (key, label, options) =>
       h(Picker, {
         label,
-        value: value[key],
+        value:
+          key === 'ownerId' && value.ownerIds.length
+            ? value.ownerIds.length === 1
+              ? value.ownerIds[0]
+              : 'MULTIPLE'
+            : value[key],
         options,
         onChange: (next) => {
+          if (next === 'MULTIPLE') return;
           setValue((current) => ({
             ...current,
             [key]: next,
+            ...(key === 'ownerId' ? { ownerIds: [] } : {}),
             ...(key === 'pipelineId'
               ? { stageId: '', mode: next ? 'board' : 'list' }
               : {}),
@@ -197,6 +212,14 @@ export const createSalesFiltersUi = (host) => {
           pick('ownerId', 'Responsável', [
             { id: '', name: 'Todos os responsáveis' },
             { id: 'UNASSIGNED', name: 'Sem responsável' },
+            ...(value.ownerIds.length > 1
+              ? [
+                  {
+                    id: 'MULTIPLE',
+                    name: `${value.ownerIds.length} responsáveis selecionados`,
+                  },
+                ]
+              : []),
             ...catalog.members,
           ]),
           pick('status', 'Status da negociação', [
@@ -263,6 +286,7 @@ export const createSalesFiltersUi = (host) => {
                     ...current,
                     stageId: '',
                     ownerId: '',
+                    ownerIds: [],
                     status: 'ALL',
                     sort: 'newest',
                   })),

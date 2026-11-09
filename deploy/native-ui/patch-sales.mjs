@@ -25,7 +25,7 @@ export const patchSalesIndex = (source) => {
   next = replaceOnce(
     next,
     '.filter(MCt).sort((o,l)=>o.name.localeCompare(l.name))',
-    '.filter(MCt).filter(o=>e!=="opportunity"||!["stage","salesPipeline","salesStage","rdOriginalData","rdSourceKey","salesPipelineKey","salesStageKey"].includes(o.name)).sort((o,l)=>o.label.localeCompare(l.label))',
+    '.filter(MCt).filter(o=>e!=="opportunity"||isOperationalSalesField(e,o.name)&&!["salesPipeline","salesStage"].includes(o.name)).sort((o,l)=>o.label.localeCompare(l.label))',
   );
   next = replaceOnce(
     next,
@@ -52,7 +52,7 @@ export const patchSalesIndex = (source) => {
     '})=>{if(GU(e))return',
     '})=>{if(!isOperationalSalesField(e.metadata.objectMetadataNameSingular,e.metadata.fieldName))return null;if(GU(e))return',
   );
-  const setup = `\n${policy()}\n${code('sales-bulk-runtime.mjs')}\n${code('sales-filters-runtime.mjs')}\nconst crmSalesBulk=createSalesBulkUi({React:y,Button:Nt,Dropdown:Z,Form:LCt,Dialog:hd,useTheme:We,useCoreClient:La,useMetadata:Gt,useStateValue:le,useAtomValue:U,objectId:nf,rule:gE,filters:_5,groups:aU,search:lU,fields:w0,useDependencies:V5,computeFilter:iU,useCreate:r5,useUpdate:WCt,usePermissions:ar,useToast:en,useDialog:xl,isEditable:MCt,gql:yn,BulkIcon:Il,ChevronIcon:is,icons:{pipeline:crmArrowIcon,stage:crmArrowIcon,owner:crmOwnerIcon,duplicate:crmCopyIcon,delete:crmTrashIcon}});\nconst crmSalesFilters=createSalesFiltersUi({React:y,Button:Nt,Section:ss,Picker:crmSalesBulk.Picker,useCoreClient:La,useTheme:We,useNavigateApp:Su,RecordIndexPage:Ce.RecordIndexPage,useSidePanel:kn,useMetadata:Gt,useStateValue:le,filters:_5,objectId:nf,gql:yn,FilterIcon:crmFilterIcon});\nexport function crmNativeHost(){return {Button:Nt,SelectionIcon:crmSelectIcon,gql:yn,useNavigate:o5,bulk:crmSalesBulk,openFilters:crmSalesFilters.open,isOperational:isOperationalSalesField};}\n`;
+  const setup = `\n${policy()}\n${code('sales-bulk-runtime.mjs')}\n${code('sales-filters-runtime.mjs')}\nconst crmSalesBulk=createSalesBulkUi({React:y,Button:Nt,Dropdown:Z,Form:LCt,Dialog:hd,useTheme:We,useCoreClient:La,useMetadata:Gt,useStateValue:le,useAtomValue:U,objectId:nf,rule:gE,filters:_5,groups:aU,search:lU,fields:w0,useDependencies:V5,computeFilter:iU,useCreate:r5,useUpdate:WCt,usePermissions:ar,useToast:en,useDialog:xl,isEditable:MCt,gql:yn,BulkIcon:Il,ChevronIcon:is,icons:{pipeline:crmArrowIcon,stage:crmArrowIcon,owner:crmOwnerIcon,duplicate:crmCopyIcon,delete:crmTrashIcon}});\nconst crmSalesFilters=createSalesFiltersUi({React:y,Button:Nt,Section:ss,Picker:crmSalesBulk.Picker,useCoreClient:La,useTheme:We,useNavigateApp:Su,RecordIndexPage:Ce.RecordIndexPage,useSidePanel:kn,useMetadata:Gt,useStateValue:le,filters:_5,objectId:nf,gql:yn,FilterIcon:crmFilterIcon});\nexport function crmNativeHost(){return {Button:Nt,useCoreClient:La,SelectionIcon:crmSelectIcon,gql:yn,useNavigate:o5,bulk:crmSalesBulk,openFilters:crmSalesFilters.open,isOperational:isOperationalSalesField};}\n`;
   return (
     'import {t as crmOwnerIcon} from \"./IconUserPin-BA4YUhyf.js\";\nimport {t as crmSelectIcon} from \"./IconSquareRoundedCheck-_QjQzihg.js\";\nimport {t as crmFilterIcon} from \"./IconFilter-BwWK91j4.js\";\nimport {t as crmArrowIcon} from \"./IconArrowRight-Z0OJN07v.js\";\nimport {t as crmCopyIcon} from \"./IconCopyPlus-DYtwDS9m.js\";\nimport {t as crmTrashIcon} from \"./IconTrash-h0izILIX.js\";\n' +
     next +
@@ -138,5 +138,161 @@ export const patchSalesPicker = (source) => {
   );
   return (
     'import {crmUseStagePickerFilter} from "./index-CgifpLnX.js";\n' + next
+  );
+};
+
+export const patchSalesToolbar = (source) => {
+  let next = replaceOnce(
+    source,
+    'className:r,leftComponent:(0,e.jsx)(Yn,{}),rightComponent:',
+    'className:[r,a==="opportunities"?"crm-sales-topbar":""].filter(Boolean).join(" "),leftComponent:a==="opportunities"?(0,e.jsx)(crmSalesToolbar,{viewPicker:(0,e.jsx)(Yn,{salesToolbar:true})}):(0,e.jsx)(Yn,{}),rightComponent:',
+  );
+  next = replaceOnce(
+    next,
+    'Yn=()=>{const t=Lr()',
+    'Yn=({salesToolbar:crmSales=false}={})=>{const t=Lr()',
+  );
+  next = replaceOnce(
+    next,
+    'clickableComponent:(0,e.jsxs)(Nu,{isUnfolded:d,children:',
+    'clickableComponent:(0,e.jsxs)(Nu,{isUnfolded:d,className:crmSales?"crm-sales-view-trigger":void 0,title:crmSales?r?.name:void 0,children:',
+  );
+  next = replaceOnce(
+    next,
+    'children:(0,e.jsx)(Qt,{text:r?.name??D._({id:"N40H+G"})})',
+    'children:crmSales?(r?.name??"Selecionar funil"):(0,e.jsx)(Qt,{text:r?.name??D._({id:"N40H+G"})})',
+  );
+  next = replaceOnce(
+    next,
+    'text:o.name,LeftComponent:',
+    'text:crmPickerObject.nameSingular==="opportunity"?(0,e.jsx)("span",{className:"crm-sales-menu-name",title:o.name,children:o.name}):o.name,LeftComponent:',
+  );
+  // Reuse Twenty's drag handlers and saved view positions, including their
+  // standard workspace/unlisted groups. Only expose reordering to view editors.
+  next = replaceOnce(
+    next,
+    'const{i18n:t,_:r}=z(),{objectMetadataItem:n}=Le(),o=ie(Et,{objectMetadataItemId:n.id}),{currentView:a}=X()',
+    'const{i18n:t,_:r}=z(),{objectMetadataItem:n}=Le(),crmIsSales=n.nameSingular==="opportunity",crmCanReorder=Yr(Kr.VIEWS),crmMoving=(0,S.useRef)(false),o=ie(Et,{objectMetadataItemId:n.id}),{currentView:a}=X()',
+  );
+  next = replaceOnce(
+    next,
+    'return(0,e.jsxs)(H,{children:[i.length>0',
+    'return(0,e.jsxs)(H,{widthInPixels:crmIsSales?380:void 0,children:[crmIsSales&&crmCanReorder&&(0,e.jsx)("div",{className:"crm-sales-view-hint",children:"Use Mais opções para mover um funil"}),i.length>0',
+  );
+  next = replaceOnce(
+    next,
+    'isDragDisabled:i.length===1,itemComponent:',
+    'isDragDisabled:i.length===1||crmIsSales&&!crmCanReorder,itemComponent:',
+  );
+  next = replaceOnce(
+    next,
+    'isDragDisabled:d.length===1,itemComponent:',
+    'isDragDisabled:d.length===1||crmIsSales&&!crmCanReorder,itemComponent:',
+  );
+  // Use the object context rather than comparing a deployment-specific UUID.
+  next = replaceOnce(
+    next,
+    'handleViewSelect:a,isCurrentView:s})=>{const i=',
+    'handleViewSelect:a,isCurrentView:s,onMoveUp:crmMoveUp,onMoveDown:crmMoveDown})=>{const {objectMetadataItem:crmPickerObject}=Le();const i=',
+  );
+  next = replaceOnce(
+    next,
+    'dropdownContent:(0,e.jsxs)(q.Section,{children:[(0,e.jsx)(q.ActionItem,{startIcon:R?',
+    'dropdownContent:(0,e.jsxs)(q.Section,{children:[crmMoveUp&&(0,e.jsx)(q.ActionItem,{onClick:crmMoveUp,children:"Mover para cima"}),crmMoveDown&&(0,e.jsx)(q.ActionItem,{onClick:crmMoveDown,children:"Mover para baixo"}),(0,e.jsx)(q.ActionItem,{startIcon:R?',
+  );
+  for (const [list, prefix] of [
+    ['i', 'R'],
+    ['d', 'N'],
+  ]) {
+    const anchor = `${prefix}=(0,S.useCallback)(async b=>{if(!b.destination)return;const V=Gn(${list},`;
+    const replacement = `${prefix}=(0,S.useCallback)(async b=>{if(crmIsSales){if(crmCanReorder)await persistSalesViewOrder(${list},b,crmMoving,w,Gn);return;}if(!b.destination)return;const V=Gn(${list},`;
+    next = replaceOnce(next, anchor, replacement);
+    next = replaceOnce(
+      next,
+      `},[w,${list}])`,
+      `},[w,${list},crmIsSales,crmCanReorder])`,
+    );
+  }
+  for (const [list, handler] of [
+    ['i', 'R'],
+    ['d', 'N'],
+  ]) {
+    const anchor = `isDragDisabled:${list}.length===1||crmIsSales&&!crmCanReorder,itemComponent:(0,e.jsx)(Kn,{view:b,`;
+    const canMove =
+      'crmIsSales&&crmCanReorder&&b.type==="KANBAN"&&b.icon==="IconLock"';
+    const move = (direction) =>
+      `()=>${handler}({source:{index:V},destination:{index:V${direction}1}})`;
+    next = replaceOnce(
+      next,
+      anchor,
+      anchor +
+        `onMoveUp:${canMove}&&V>0?${move('-')}:void 0,onMoveDown:${canMove}&&V<${list}.length-1?${move('+')}:void 0,`,
+    );
+  }
+  return (
+    'import {crmNativeHost} from "./index-CgifpLnX.js";\n' +
+    'import {t as crmCurrentMember} from "./currentWorkspaceMemberState-BHtlcIL4.js";\n' +
+    'import {t as crmOwnerIcon} from "./IconUserPin-BA4YUhyf.js";\n' +
+    'import {t as crmStatusIcon} from "./IconSquareRoundedCheck-_QjQzihg.js";\n' +
+    next +
+    '\n' +
+    policy() +
+    '\n' +
+    code('sales-toolbar-policy.mjs').replace(
+      "import { salesStatusCriteria } from './sales-bulk-policy.mjs';",
+      '',
+    ) +
+    '\n' +
+    code('sales-toolbar-runtime.mjs') +
+    '\n' +
+    'const crmSalesToolbar=createSalesToolbar({React:S,Button:_e,Dropdown:q,useIndex:W,useView:X,useValue:h,useSet:T,filters:Ce,groups:ve,sorts:tt,toNativeFilters:va,useMember:()=>fe(crmCurrentMember),getNative:crmNativeHost,Chevron:wo,OwnerIcon:crmOwnerIcon,StatusIcon:crmStatusIcon,SortIcon:$i});\n'
+  );
+};
+
+export const patchSalesContactPicker = (source) => {
+  let next = replaceOnce(
+    source,
+    'd=e.length>0,x=d?{id:{in:e}}:void 0,{loading:S,searchRecords:v,error:h}',
+    'crmPhone=useContactPhoneLookup(i.length===1&&i[0]==="person"?s:""),d=e.length>0,x=d?{id:{in:e}}:void 0,{loading:S,searchRecords:v,error:h}',
+  );
+  next = replaceOnce(
+    next,
+    'filter:x,skip:!d,searchInput:s}',
+    'filter:crmPhone.enabled?{id:{in:e.filter(id=>crmPhone.ids.includes(id))}}:x,skip:!d||crmPhone.enabled&&(crmPhone.loading||!e.some(id=>crmPhone.ids.includes(id))),searchInput:crmPhone.enabled?"":s}',
+  );
+  next = replaceOnce(
+    next,
+    'filter:C.length?{not:{id:{in:C}}}:void 0,limit:r??60,searchInput:s,fetchPolicy:"cache-and-network"',
+    'filter:crmPhone.enabled?{id:{in:crmPhone.ids.filter(id=>!C.includes(id))}}:C.length?{not:{id:{in:C}}}:void 0,skip:crmPhone.enabled&&(crmPhone.loading||!crmPhone.ids.some(id=>!C.includes(id))),limit:r??60,searchInput:crmPhone.enabled?"":s,fetchPolicy:"cache-and-network"',
+  );
+  next = replaceOnce(
+    next,
+    'recordsToSelectError:F,pickableMorphItems:',
+    'recordsToSelectError:crmPhone.error??F,pickableMorphItems:',
+  );
+  next = replaceOnce(
+    next,
+    'loading:P||u||S}},B=R',
+    'loading:crmPhone.loading||P||u||S}},B=R',
+  );
+  return (
+    'import {t as crmPhoneClient} from "./useApolloCoreClient-C-mOx_nk.js";\n' +
+    'import {t as crmPhoneQuery} from "./useQuery-CtcJMKbb.js";\n' +
+    'import {t as crmPhoneGql} from "./lib-C3IpGLsk.js";\n' +
+    next +
+    '\n' +
+    code('contact-phone-search.mjs') +
+    `
+const crmContactPhoneQuery = crmPhoneGql('query CrmFindContactsByPhone($filter:PersonFilterInput!){people(first:100,filter:$filter){edges{node{id}}}}');
+const useContactPhoneLookup = (search) => {
+  const filter = contactPhoneFilter(search);
+  const client = crmPhoneClient();
+  const { data, error, loading } = crmPhoneQuery(crmContactPhoneQuery, {
+    client, skip: !filter, variables: { filter },
+  });
+  return { enabled: Boolean(filter), loading: Boolean(filter) && loading,
+    error: filter ? error : undefined, ids: data?.people?.edges.map(({ node }) => node.id) ?? [] };
+};
+`
   );
 };

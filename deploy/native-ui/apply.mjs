@@ -14,9 +14,11 @@ import {
   patchSalesBoard,
   patchSalesCommands,
   patchSalesPicker,
+  patchSalesToolbar,
+  patchSalesContactPicker,
 } from './patch-sales.mjs';
 
-const revision = 'crm-sales-bulk-v6';
+const revision = 'crm-sales-workbench-v1';
 const bundle = 'RecordIndexPage-D8zcMDY8.js';
 const expectedSha256 =
   'b547da8d7d93a54d5ac6373d74edaea3ddd1fa784a15582fb11a147cf05777ce';
@@ -24,7 +26,7 @@ const targets = [
   {
     bundle,
     checksum: expectedSha256,
-    patch: (source) => patchSalesPicker(patchPicker(source)),
+    patch: (source) => patchSalesToolbar(patchSalesPicker(patchPicker(source))),
   },
   {
     bundle: 'index-CgifpLnX.js',
@@ -43,6 +45,12 @@ const targets = [
     checksum:
       'dcee8332e411c279b13aaa0fe35a2c737498a32bb490fdb907ed162e908789a6',
     patch: patchSalesCommands,
+  },
+  {
+    bundle: 'Dropdown-B6MSdEqP.js',
+    checksum:
+      'e8d4c2dceec4307cd482fd440485602c00a394fee01a3cc382e68dab77a8aa0e',
+    patch: patchSalesContactPicker,
   },
 ];
 const hash = (value) => createHash('sha256').update(value).digest('hex');
